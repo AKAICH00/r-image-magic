@@ -1,0 +1,63 @@
+[package]
+name = "r-image-magic"
+version = "1.0.0"
+edition = "2021"
+authors = ["R-Image-Magic Team"]
+description = "High-performance image compositing and mockup generation API using displacement mapping"
+license = "MIT"
+repository = "https://github.com/akaich00/r-image-magic"
+
+[dependencies]
+# Web framework
+actix-web = "4.4"
+actix-rt = "2.9"
+tokio = { version = "1.35", features = ["full"] }
+
+# Image processing
+image = "0.24"
+imageproc = "0.23"
+rayon = "1.10"
+
+# Async HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Configuration
+config = "0.14"
+dotenvy = "0.15"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging & tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-actix-web = "0.7"
+
+# Utilities
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+once_cell = "1.19"
+parking_lot = "0.12"
+bytes = "1.5"
+base64 = "0.22"
+num_cpus = "1.16"
+
+# Cloudinary (we'll implement a simple client)
+# cloudinary = "0.5"  # Optional, can implement manually
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[[bin]]
+name = "r-image-magic"
+path = "src/main.rs"

@@ -1,0 +1,54 @@
+{
+  "id": "white_male_front",
+  "version": 3,
+  "category": "t-shirt",
+  "color": "white",
+  "color_hex": "#FFFFFF",
+  "placement": "front",
+  "gender": "unisex",
+  "product": "Bella + Canvas 3001",
+  "dimensions": {
+    "width": 2400,
+    "height": 3200
+  },
+  "print_area": {
+    "x": 550,
+    "y": 450,
+    "width": 1300,
+    "height": 1600
+  },
+  "anchor_point": {
+    "x": 1200,
+    "y": 1250
+  },
+  "displacement": {
+    "enabled": true,
+    "strength_default": 8.0,
+    "strength_range": [3.0, 15.0]
+  },
+  "blend_mode": "multiply",
+  "default_opacity": 255,
+  "zones": {
+    "full_dtg": {
+      "description": "Full DTG print area - fits visible shirt body",
+      "x": 550,
+      "y": 450,
+      "width": 1300,
+      "height": 1600
+    },
+    "standard": {
+      "description": "Standard print area - centered chest",
+      "x": 600,
+      "y": 500,
+      "width": 1200,
+      "height": 1400
+    },
+    "logo": {
+      "description": "Logo/embroidery area - upper chest",
+      "x": 800,
+      "y": 550,
+      "width": 800,
+      "height": 800
+    }
+  }
+}
