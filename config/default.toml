@@ -14,6 +14,10 @@ api_key = ""
 api_secret = ""
 upload_preset = "mockups"
 
+[database]
+url = "postgresql://r_image_magic:RImageMagic2024Pass@100.120.113.6:5432/r_image_magic"
+max_connections = 10
+
 [performance]
 max_concurrent_requests = 1000
 request_timeout_seconds = 30

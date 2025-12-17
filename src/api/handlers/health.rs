@@ -3,10 +3,11 @@
 use actix_web::{web, HttpResponse};
 use serde::Serialize;
 use std::time::SystemTime;
+use utoipa::ToSchema;
 
 use crate::AppState;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct HealthResponse {
     pub status: &'static str,
     pub version: &'static str,
@@ -15,6 +16,14 @@ pub struct HealthResponse {
 }
 
 /// GET /health - Health check endpoint
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "system",
+    responses(
+        (status = 200, description = "Service is healthy", body = HealthResponse)
+    )
+)]
 pub async fn health_check(state: web::Data<AppState>) -> HttpResponse {
     // Calculate uptime (simple approximation using process start time)
     let uptime = SystemTime::now()

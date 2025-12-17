@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use utoipa::ToSchema;
 
 /// Display template dimensions (for Cloudinary preview)
 pub const DISPLAY_TEMPLATE_WIDTH: i32 = 1000;
@@ -26,7 +27,7 @@ pub enum PlacementError {
 }
 
 /// Coordinate space for placement calculations
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CoordinateSpace {
     Display,
@@ -40,7 +41,7 @@ impl Default for CoordinateSpace {
 }
 
 /// Placement type (front, back, etc.)
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PlacementType {
     Front,
@@ -59,7 +60,7 @@ impl Default for PlacementType {
 ///
 /// This struct defines where a design should be placed on a t-shirt template.
 /// It uses a center-based coordinate system with scale and offset.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PlacementSpec {
     /// Scale factor (0.1 to 1.0) - percentage of print area width
     pub scale: f64,

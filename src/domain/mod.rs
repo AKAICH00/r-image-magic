@@ -2,4 +2,4 @@
 
 mod placement;
 
-pub use placement::PlacementSpec;
+pub use placement::{PlacementSpec, PlacementType, CoordinateSpace};

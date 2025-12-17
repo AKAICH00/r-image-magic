@@ -10,6 +10,7 @@ pub struct Settings {
     pub server: ServerSettings,
     pub templates: TemplateSettings,
     pub cloudinary: CloudinarySettings,
+    pub database: DatabaseSettings,
 }
 
 /// HTTP server configuration
@@ -33,6 +34,13 @@ pub struct CloudinarySettings {
     pub api_key: String,
     pub api_secret: String,
     pub upload_preset: Option<String>,
+}
+
+/// Database configuration for PostgreSQL
+#[derive(Debug, Clone, Deserialize)]
+pub struct DatabaseSettings {
+    pub url: String,
+    pub max_connections: Option<u32>,
 }
 
 impl Settings {
@@ -79,6 +87,10 @@ impl Default for Settings {
                 api_key: String::new(),
                 api_secret: String::new(),
                 upload_preset: None,
+            },
+            database: DatabaseSettings {
+                url: String::new(),
+                max_connections: Some(10),
             },
         }
     }

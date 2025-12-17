@@ -38,6 +38,11 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-actix-web = "0.7"
 
+# Database
+deadpool-postgres = "0.14"
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-uuid-1"] }
+url = "2.5"
+
 # Utilities
 uuid = { version = "1.6", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -46,6 +51,10 @@ parking_lot = "0.12"
 bytes = "1.5"
 base64 = "0.22"
 num_cpus = "1.16"
+
+# OpenAPI / Swagger
+utoipa = { version = "5", features = ["actix_extras", "uuid", "chrono"] }
+utoipa-swagger-ui = { version = "8", features = ["actix-web"] }
 
 # Cloudinary (we'll implement a simple client)
 # cloudinary = "0.5"  # Optional, can implement manually

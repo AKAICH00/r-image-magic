@@ -13,14 +13,18 @@ mod api;
 mod domain;
 mod engine;
 mod config;
+mod db;
 
 use crate::config::Settings;
 use crate::engine::TemplateManager;
+use crate::db::{DbPool, TemplateRepository};
 
 /// Application state shared across all handlers
 pub struct AppState {
     pub settings: Settings,
     pub template_manager: Arc<TemplateManager>,
+    pub db_pool: Option<DbPool>,
+    pub template_repo: Option<TemplateRepository>,
 }
 
 #[actix_web::main]
@@ -58,10 +62,36 @@ async fn main() -> std::io::Result<()> {
     template_manager.load_all().await.expect("Failed to load templates");
     info!("Loaded {} templates", template_manager.template_count());
 
+    // Initialize database connection if DATABASE_URL is configured
+    let (db_pool, template_repo) = if !settings.database.url.is_empty() {
+        match DbPool::new(&settings.database.url) {
+            Ok(pool) => {
+                // Test the connection
+                if let Err(e) = pool.test_connection().await {
+                    tracing::warn!("Database connection test failed: {}. Running without database.", e);
+                    (None, None)
+                } else {
+                    let repo = TemplateRepository::new(pool.clone());
+                    info!("Database pool initialized successfully");
+                    (Some(pool), Some(repo))
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to create database pool: {}. Running without database.", e);
+                (None, None)
+            }
+        }
+    } else {
+        info!("No DATABASE_URL configured, running without database");
+        (None, None)
+    };
+
     // Create shared application state
     let app_state = web::Data::new(AppState {
         settings: settings.clone(),
         template_manager,
+        db_pool,
+        template_repo,
     });
 
     // Configure and start HTTP server

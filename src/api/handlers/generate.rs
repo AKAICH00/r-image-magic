@@ -4,13 +4,14 @@ use actix_web::{web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use tracing::{info, error};
 use std::time::Instant;
+use utoipa::ToSchema;
 
 use crate::AppState;
 use crate::domain::PlacementSpec;
 use crate::engine::MockupRequest;
 
 /// Request body for mockup generation
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct GenerateRequest {
     /// URL of the design image to composite
     pub design_url: String,
@@ -24,7 +25,7 @@ pub struct GenerateRequest {
 }
 
 /// Optional generation options
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, ToSchema)]
 pub struct GenerateOptions {
     /// JPEG output quality (1-100, default 85)
     #[serde(default = "default_quality")]
@@ -38,7 +39,7 @@ fn default_quality() -> u8 { 85 }
 fn default_displacement() -> f64 { 10.0 }
 
 /// Response for successful mockup generation
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct GenerateResponse {
     pub success: bool,
     pub mockup_url: String,
@@ -46,33 +47,45 @@ pub struct GenerateResponse {
 }
 
 /// Metadata about the generation
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct GenerateMetadata {
     pub generation_time_ms: u64,
     pub template_used: String,
     pub dimensions: Dimensions,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct Dimensions {
     pub width: u32,
     pub height: u32,
 }
 
 /// Error response
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ErrorResponse {
     pub success: bool,
     pub error: ApiError,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ApiError {
     pub code: String,
     pub message: String,
 }
 
 /// POST /api/v1/mockups/generate - Generate a mockup
+#[utoipa::path(
+    post,
+    path = "/api/v1/mockups/generate",
+    tag = "mockups",
+    request_body = GenerateRequest,
+    responses(
+        (status = 200, description = "Mockup generated successfully", body = GenerateResponse),
+        (status = 400, description = "Invalid placement specification", body = ErrorResponse),
+        (status = 404, description = "Template not found", body = ErrorResponse),
+        (status = 500, description = "Generation failed", body = ErrorResponse)
+    )
+)]
 pub async fn generate_mockup(
     state: web::Data<AppState>,
     body: web::Json<GenerateRequest>,
