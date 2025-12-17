@@ -29,10 +29,11 @@ FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# Install runtime dependencies
+# Install runtime dependencies (including curl for health check)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary from builder
@@ -53,9 +54,9 @@ EXPOSE 8080
 ENV RUST_LOG=info
 ENV CONFIG_DIR=/app/config
 
-# Health check (using wget for minimal image)
+# Health check (using curl)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Run the server
 CMD ["/app/r-image-magic"]
