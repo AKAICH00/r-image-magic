@@ -32,7 +32,6 @@ pub struct MockupRequest {
     pub template_id: String,
     pub placement: PlacementSpec,
     pub displacement_strength: f64,
-    pub output_quality: u8,
 }
 
 /// Result of mockup generation
@@ -123,23 +122,23 @@ impl Compositor {
             &template.metadata.blend_mode,
         );
 
-        // 5. Encode to JPEG
+        // 5. Encode to PNG (preserves RGBA transparency)
         let (width, height) = composited.dimensions();
-        let jpeg_bytes = self.encode_jpeg(&composited, request.output_quality)?;
+        let png_bytes = self.encode_png(&composited)?;
 
         info!(
             width = width,
             height = height,
-            bytes = jpeg_bytes.len(),
-            "Mockup generation complete"
+            bytes = png_bytes.len(),
+            "Mockup generation complete (PNG with transparency)"
         );
 
         // For now, return the bytes directly (Cloudinary upload can be added later)
         Ok(MockupResult {
-            url: format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(&jpeg_bytes)),
+            url: format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&png_bytes)),
             width,
             height,
-            bytes: Bytes::from(jpeg_bytes),
+            bytes: Bytes::from(png_bytes),
         })
     }
 
@@ -286,11 +285,16 @@ impl Compositor {
         Rgba(result)
     }
 
-    /// Encode image to JPEG bytes
-    fn encode_jpeg(&self, image: &DynamicImage, quality: u8) -> Result<Vec<u8>, CompositorError> {
+    /// Encode image to PNG bytes (preserves RGBA transparency)
+    fn encode_png(&self, image: &DynamicImage) -> Result<Vec<u8>, CompositorError> {
         let mut buffer = Vec::new();
-        let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buffer, quality);
-        encoder.encode_image(image)?;
+        let encoder = image::codecs::png::PngEncoder::new(&mut buffer);
+        encoder.encode(
+            image.as_bytes(),
+            image.width(),
+            image.height(),
+            image.color().into(),
+        )?;
         Ok(buffer)
     }
 

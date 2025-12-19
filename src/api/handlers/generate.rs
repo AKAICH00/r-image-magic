@@ -27,15 +27,11 @@ pub struct GenerateRequest {
 /// Optional generation options
 #[derive(Debug, Default, Deserialize, ToSchema)]
 pub struct GenerateOptions {
-    /// JPEG output quality (1-100, default 85)
-    #[serde(default = "default_quality")]
-    pub output_quality: u8,
     /// Displacement strength (0-30, default 10)
     #[serde(default = "default_displacement")]
     pub displacement_strength: f64,
 }
 
-fn default_quality() -> u8 { 85 }
 fn default_displacement() -> f64 { 10.0 }
 
 /// Response for successful mockup generation
@@ -131,7 +127,6 @@ pub async fn generate_mockup(
         template_id: body.template_id.clone(),
         placement: body.placement.clone(),
         displacement_strength: body.options.displacement_strength,
-        output_quality: body.options.output_quality,
     };
 
     // Generate mockup (this is the heavy lifting)
