@@ -94,8 +94,8 @@ pub async fn generate_mockup(
         "Processing mockup generation request"
     );
 
-    // Validate template exists
-    let _template = match state.template_manager.get(&body.template_id) {
+    // Validate template exists and get its print area dimensions
+    let template = match state.template_manager.get(&body.template_id) {
         Some(t) => t,
         None => {
             error!(template_id = %body.template_id, "Template not found");
@@ -109,8 +109,13 @@ pub async fn generate_mockup(
         }
     };
 
-    // Validate placement
-    if let Err(e) = body.placement.validate() {
+    // Create placement with template's actual print area dimensions
+    let mut placement = body.placement.clone();
+    placement.print_area_width = template.metadata.print_area.width as i32;
+    placement.print_area_height = template.metadata.print_area.height as i32;
+
+    // Validate placement with correct dimensions
+    if let Err(e) = placement.validate() {
         error!(error = %e, "Invalid placement specification");
         return HttpResponse::BadRequest().json(ErrorResponse {
             success: false,
@@ -121,11 +126,11 @@ pub async fn generate_mockup(
         });
     }
 
-    // Create mockup request
+    // Create mockup request with adjusted placement
     let request = MockupRequest {
         design_url: body.design_url.clone(),
         template_id: body.template_id.clone(),
-        placement: body.placement.clone(),
+        placement,
         displacement_strength: body.options.displacement_strength,
     };
 
