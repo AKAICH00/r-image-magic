@@ -18,6 +18,7 @@ mod db;
 use crate::config::Settings;
 use crate::engine::TemplateManager;
 use crate::db::{DbPool, TemplateRepository};
+use crate::api::middleware::ApiMiddleware;
 
 /// Application state shared across all handlers
 pub struct AppState {
@@ -86,6 +87,10 @@ async fn main() -> std::io::Result<()> {
         (None, None)
     };
 
+    // Clone pool for middleware and handlers (before moving into AppState)
+    let middleware_pool = db_pool.clone();
+    let pool_data = db_pool.clone().map(web::Data::new);
+
     // Create shared application state
     let app_state = web::Data::new(AppState {
         settings: settings.clone(),
@@ -96,9 +101,19 @@ async fn main() -> std::io::Result<()> {
 
     // Configure and start HTTP server
     HttpServer::new(move || {
-        App::new()
-            .app_data(app_state.clone())
-            // Middleware
+        let mut app = App::new()
+            .app_data(app_state.clone());
+
+        // Add database pool as web::Data if available
+        if let Some(ref pool) = pool_data {
+            app = app.app_data(pool.clone());
+        }
+
+        app
+            // API middleware for auth, rate limiting, usage tracking
+            // (handles missing DB gracefully by skipping auth)
+            .wrap(ApiMiddleware::new(middleware_pool.clone()))
+            // Middleware (order matters - these wrap around ApiMiddleware)
             .wrap(TracingLogger::default())
             .wrap(middleware::Compress::default())
             .wrap(

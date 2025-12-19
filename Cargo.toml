@@ -51,6 +51,12 @@ parking_lot = "0.12"
 bytes = "1.5"
 base64 = "0.22"
 num_cpus = "1.16"
+rand = "0.8"
+sha2 = "0.10"
+hex = "0.4"
+dashmap = "6.0"
+futures = "0.3"
+actix-web-httpauth = "0.8"
 
 # OpenAPI / Swagger
 utoipa = { version = "5", features = ["actix_extras", "uuid", "chrono"] }
