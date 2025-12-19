@@ -58,6 +58,13 @@ dashmap = "6.0"
 futures = "0.3"
 actix-web-httpauth = "0.8"
 
+# POD Provider Integration
+async-trait = "0.1"
+governor = "0.6"                                    # Rate limiting for provider APIs
+aws-sdk-s3 = "1.0"                                  # R2 (S3-compatible) storage
+aws-config = "1.0"
+nonzero_ext = "0.3"                                 # NonZeroU32 helpers for governor
+
 # OpenAPI / Swagger
 utoipa = { version = "5", features = ["actix_extras", "uuid", "chrono"] }
 utoipa-swagger-ui = { version = "8", features = ["actix-web"] }

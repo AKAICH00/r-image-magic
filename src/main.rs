@@ -14,6 +14,7 @@ mod domain;
 mod engine;
 mod config;
 mod db;
+mod providers;
 
 use crate::config::Settings;
 use crate::engine::TemplateManager;
