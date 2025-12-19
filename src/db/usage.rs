@@ -75,7 +75,7 @@ impl UsageRepository {
                 api_key_id, endpoint, method, template_id,
                 status_code, response_time_ms, error_code, error_message,
                 ip_address, user_agent
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::inet, $10)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, '')::inet, $10)
             "#,
             &[
                 &entry.api_key_id,
@@ -86,7 +86,7 @@ impl UsageRepository {
                 &entry.response_time_ms,
                 &entry.error_code,
                 &entry.error_message,
-                &ip_str,
+                &ip_str.unwrap_or_default(),
                 &entry.user_agent,
             ]
         ).await?;
