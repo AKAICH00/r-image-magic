@@ -11,6 +11,8 @@ pub struct Settings {
     pub templates: TemplateSettings,
     pub cloudinary: CloudinarySettings,
     pub database: DatabaseSettings,
+    #[serde(default)]
+    pub r2: Option<R2Settings>,
 }
 
 /// HTTP server configuration
@@ -41,6 +43,21 @@ pub struct CloudinarySettings {
 pub struct DatabaseSettings {
     pub url: String,
     pub max_connections: Option<u32>,
+}
+
+/// Cloudflare R2 configuration for POD asset storage
+#[derive(Debug, Clone, Deserialize)]
+pub struct R2Settings {
+    /// Cloudflare account ID
+    pub account_id: String,
+    /// R2 Access Key ID
+    pub access_key_id: String,
+    /// R2 Secret Access Key
+    pub secret_access_key: String,
+    /// Bucket name for POD assets
+    pub bucket_name: String,
+    /// Public URL prefix for assets (optional, for CDN)
+    pub public_url_prefix: Option<String>,
 }
 
 impl Settings {
@@ -92,6 +109,7 @@ impl Default for Settings {
                 url: String::new(),
                 max_connections: Some(10),
             },
+            r2: None,
         }
     }
 }

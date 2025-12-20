@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: r-image-magic
+  namespace: r-image-magic
+  labels:
+    app: r-image-magic
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: r-image-magic
+  template:
+    metadata:
+      labels:
+        app: r-image-magic
+    spec:
+      containers:
+      - name: r-image-magic
+        image: ghcr.io/akaich00/r-image-magic:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        # Database configuration
+        - name: MOCKUP__DATABASE__URL
+          value: postgresql://r_image_magic:RImageMagic2024Pass@postgres-cluster-rw.db-postgres.svc.cluster.local:5432/r_image_magic
+        - name: RUST_LOG
+          value: info
+
+        # Cloudflare R2 configuration
+        - name: R2_ACCOUNT_ID
+          valueFrom:
+            secretKeyRef:
+              name: r2-pod-assets
+              key: account-id
+        - name: R2_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: r2-pod-assets
+              key: access-key-id
+        - name: R2_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: r2-pod-assets
+              key: secret-access-key
+        - name: R2_BUCKET_NAME
+          value: r-image-magic-pod-assets
+        # Optional: Set this to your custom domain for R2 public access
+        # - name: R2_PUBLIC_URL_PREFIX
+        #   value: https://assets.yourdomain.com
+
+        # POD Provider credentials
+        - name: PRINTFUL_ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: pod-provider-secrets
+              key: printful-token
+              optional: true
+        - name: PRINTIFY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: pod-provider-secrets
+              key: printify-key
+              optional: true
+        - name: GELATO_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: pod-provider-secrets
+              key: gelato-key
+              optional: true
+        - name: SPOD_ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: pod-provider-secrets
+              key: spod-token
+              optional: true
+        - name: GOOTEN_RECIPE_ID
+          valueFrom:
+            secretKeyRef:
+              name: pod-provider-secrets
+              key: gooten-recipe-id
+              optional: true
+
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5

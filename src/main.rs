@@ -15,6 +15,8 @@ mod engine;
 mod config;
 mod db;
 mod providers;
+mod storage;
+mod sync;
 
 use crate::config::Settings;
 use crate::engine::TemplateManager;

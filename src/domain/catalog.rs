@@ -159,6 +159,21 @@ impl PrintPlacement {
             PrintPlacement::Other(s.to_string())
         }
     }
+
+    /// Get the string representation of the placement
+    pub fn as_str(&self) -> &str {
+        match self {
+            PrintPlacement::Front => "front",
+            PrintPlacement::Back => "back",
+            PrintPlacement::SleeveLeft => "sleeve_left",
+            PrintPlacement::SleeveRight => "sleeve_right",
+            PrintPlacement::Pocket => "pocket",
+            PrintPlacement::Hood => "hood",
+            PrintPlacement::FullWrap => "full_wrap",
+            PrintPlacement::AllOver => "all_over",
+            PrintPlacement::Other(s) => s.as_str(),
+        }
+    }
 }
 
 impl std::fmt::Display for PrintPlacement {
