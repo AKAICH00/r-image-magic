@@ -2,105 +2,74 @@
 
 High-performance image compositing and mockup generation API built with Rust + Actix-Web.
 
-## Features
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Rust](https://img.shields.io/badge/rust-1.75%2B-blue.svg)](https://www.rust-lang.org)
 
-- **True Displacement Mapping** - Realistic fabric distortion for product mockups
-- **10K+ Concurrent Connections** - Built for scale with async I/O
-- **Template-Based Generation** - Preloaded templates for fast mockup creation
-- **Multi-format Output** - PNG, JPEG, WebP support
-- **Docker Ready** - Optimized multi-stage Dockerfile included
+## 🚀 Features
 
-## Quick Start
+- **True Displacement Mapping** - Realistic fabric distortion for photorealistic product mockups.
+- **10K+ Concurrent Connections** - Built for extreme scale with async I/O and Actix-Web.
+- **Parallel Processing** - Leverages Rayon for lightning-fast image processing across all CPU cores.
+- **Template-Based Generation** - Preloaded templates with intelligent metadata for zero-drift positioning.
+- **Cloud-Ready** - Optional integrations with Cloudflare R2 and Cloudinary.
+- **Docker Optimized** - Multi-stage builds for minimal image size.
+
+## 📚 Documentation
+
+For detailed guides, please see the [DOCS/](./DOCS) directory:
+
+- [**API Reference**](./DOCS/API.md) - Endpoints, authentication, and request/response schemas.
+- [**Architecture Overview**](./DOCS/ARCHITECTURE.md) - System design and component breakdown.
+- [**Generation Engine**](./DOCS/ENGINE.md) - Technical details on displacement mapping and the pipeline.
+- [**Configuration Guide**](./DOCS/CONFIGURATION.md) - Environment variables and TOML settings.
+- [**Templates Guide**](./DOCS/TEMPLATES.md) - How to create and manage mockup templates.
+
+## 🛠️ Quick Start
 
 ### Prerequisites
 
 - Rust 1.75+
-- Docker (optional)
+- PostgreSQL (optional, for persistent storage)
 
 ### Local Development
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/akaich00/r-image-magic.git
 cd r-image-magic
 
-# Create .env file
-cp .env.example .env
+# 2. Setup configuration
+cp config/default.toml config/local.toml
 
-# Run the server
+# 3. Run the server
 cargo run --release
-
-# Server starts at http://localhost:8080
 ```
 
-### Docker
+The server will start at `http://localhost:8080`. Check the health endpoint: `curl http://localhost:8080/health`.
+
+## 🐳 Docker
 
 ```bash
 # Build the image
 docker build -t r-image-magic .
 
 # Run the container
-docker run -p 8080:8080 -v ./assets:/app/assets -v ./config:/app/config r-image-magic
+docker run -p 8080:8080 
+  -v ./assets:/app/assets 
+  -v ./config:/app/config 
+  r-image-magic
 ```
 
-## API Endpoints
+## 🧪 Testing
 
-### Health Check
-```
-GET /health
-```
+```bash
+# Run all tests
+cargo test
 
-### Generate Mockup
-```
-POST /api/v1/mockup
-Content-Type: application/json
-
-{
-  "template_id": "white-tshirt-front",
-  "design_url": "https://example.com/design.png",
-  "position": {
-    "x": 0.5,
-    "y": 0.3
-  },
-  "scale": 0.4
-}
+# Run with logging enabled
+RUST_LOG=debug cargo test
 ```
 
-### List Templates
-```
-GET /api/v1/templates
-```
+## 📄 License
 
-## Configuration
-
-Environment variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HOST` | `0.0.0.0` | Server bind address |
-| `PORT` | `8080` | Server port |
-| `RUST_LOG` | `info` | Log level |
-| `CONFIG_DIR` | `./config` | Configuration directory |
-| `TEMPLATES_PATH` | `./assets/templates` | Templates directory |
-
-## Project Structure
-
-```
-r-image-magic/
-├── src/
-│   ├── main.rs          # Application entry point
-│   ├── api/             # HTTP handlers and routes
-│   ├── config/          # Configuration loading
-│   ├── domain/          # Business logic and types
-│   └── engine/          # Image processing engine
-├── assets/
-│   └── templates/       # Mockup templates
-├── config/              # Configuration files
-├── Cargo.toml
-├── Dockerfile
-└── README.md
-```
-
-## License
-
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -1,7 +1,6 @@
 //! Database connection pool management
 
 use deadpool_postgres::{Config, Pool, Runtime, ManagerConfig, RecyclingMethod};
-use tokio_postgres::NoTls;
 use thiserror::Error;
 use tracing::info;
 
@@ -24,6 +23,16 @@ pub struct DbPool {
     pool: Pool,
 }
 
+/// Build a rustls TLS connector for PostgreSQL
+fn make_tls_connector() -> tokio_postgres_rustls::MakeRustlsConnect {
+    let mut root_store = rustls::RootCertStore::empty();
+    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let config = rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+    tokio_postgres_rustls::MakeRustlsConnect::new(config)
+}
+
 impl DbPool {
     /// Create a new database pool from a connection string
     pub fn new(database_url: &str) -> Result<Self, DbError> {
@@ -38,6 +47,10 @@ impl DbPool {
         let password = url.password().unwrap_or("");
         let dbname = url.path().trim_start_matches('/');
 
+        // Check if SSL is requested
+        let use_tls = url.query_pairs()
+            .any(|(k, v)| k == "sslmode" && v != "disable");
+
         let mut cfg = Config::new();
         cfg.host = Some(host.to_string());
         cfg.port = Some(port);
@@ -49,14 +62,14 @@ impl DbPool {
             recycling_method: RecyclingMethod::Fast,
         });
 
-        let pool = cfg.create_pool(Some(Runtime::Tokio1), NoTls)?;
-
-        info!(
-            host = %host,
-            port = %port,
-            dbname = %dbname,
-            "Database pool created"
-        );
+        let pool = if use_tls {
+            let tls = make_tls_connector();
+            info!(host = %host, port = %port, dbname = %dbname, "Database pool created (TLS)");
+            cfg.create_pool(Some(Runtime::Tokio1), tls)?
+        } else {
+            info!(host = %host, port = %port, dbname = %dbname, "Database pool created (NoTLS)");
+            cfg.create_pool(Some(Runtime::Tokio1), tokio_postgres::NoTls)?
+        };
 
         Ok(DbPool { pool })
     }
