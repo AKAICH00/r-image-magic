@@ -7,18 +7,24 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE: ghcr.io/${{ github.repository_owner }}/r-image-magic
+  IMAGE: ghcr.io/akaich00/r-image-magic
+  AWS_REGION: us-east-1
+  ECS_CLUSTER: akaich00-cluster
+  ECS_SERVICE: r-image-magic
+  ECS_TASK_FAMILY: r-image-magic
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
 
 jobs:
   build:
     name: Build & Push ARM64 Image
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
 
     outputs:
-      sha: ${{ steps.vars.outputs.sha_short }}
+      image_tag: ${{ steps.vars.outputs.sha_short }}
 
     steps:
       - uses: actions/checkout@v4
@@ -42,51 +48,143 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.CR_PAT }}
 
-      - name: Extract image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE }}
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-
       - name: Build and push ARM64 image
         uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.vars.outputs.sha_short }}
+            ${{ env.IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   deploy:
-    name: Update GitOps Manifest
+    name: Deploy to ECS
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Checkout k8s-deployments repo
-        uses: actions/checkout@v4
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          repository: AKAICH00/k8s-deployments
-          token: ${{ secrets.K8S_DEPLOYMENTS_PAT }}
-          path: k8s-deployments
+          role-to-assume: arn:aws:iam::286119371519:role/github-actions-deploy
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Update image tag in manifest
+      - name: Ensure GHCR pull secret exists in Secrets Manager
         run: |
-          cd k8s-deployments
-          if [ -f apps/r-image-magic/deployment.yaml ]; then
-            sed -i "s|image: ghcr.io/akaich00/r-image-magic:.*|image: ghcr.io/akaich00/r-image-magic:${{ needs.build.outputs.sha }}|g" apps/r-image-magic/deployment.yaml
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add .
-            git diff --staged --quiet || git commit -m "deploy(r-image-magic): ${{ needs.build.outputs.sha }}"
-            git push
-            echo "✅ Manifest updated: r-image-magic → ${{ needs.build.outputs.sha }}"
-          else
-            echo "ℹ️ No manifest at apps/r-image-magic/deployment.yaml — ECS manages deployment via Terraform"
+          SECRET_NAME="r-image-magic/ghcr-credentials"
+          if ! aws secretsmanager describe-secret --secret-id "$SECRET_NAME" 2>/dev/null; then
+            echo "Creating GHCR pull secret..."
+            aws secretsmanager create-secret \
+              --name "$SECRET_NAME" \
+              --secret-string '{"username":"${{ github.actor }}","password":"${{ secrets.CR_PAT }}"}'
           fi
+
+      - name: Ensure CloudWatch log group exists
+        run: |
+          aws logs create-log-group --log-group-name /ecs/r-image-magic 2>/dev/null || true
+
+      - name: Get current task definition
+        id: current-task
+        run: |
+          # Check if task definition exists
+          if aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK_FAMILY }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Register task definition
+        id: register-task
+        run: |
+          IMAGE_URI="${{ env.IMAGE }}:${{ needs.build.outputs.image_tag }}"
+          GHCR_SECRET_ARN=$(aws secretsmanager describe-secret --secret-id "r-image-magic/ghcr-credentials" --query 'ARN' --output text)
+
+          TASK_DEF=$(cat <<'TASKEOF'
+          {
+            "family": "r-image-magic",
+            "networkMode": "awsvpc",
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "1024",
+            "memory": "2048",
+            "runtimePlatform": {
+              "cpuArchitecture": "ARM64",
+              "operatingSystemFamily": "LINUX"
+            },
+            "executionRoleArn": "arn:aws:iam::286119371519:role/ecsTaskExecutionRole",
+            "containerDefinitions": [
+              {
+                "name": "r-image-magic",
+                "essential": true,
+                "portMappings": [{"containerPort": 8080, "protocol": "tcp"}],
+                "environment": [
+                  {"name": "RUST_LOG", "value": "info"},
+                  {"name": "MOCKUP__SERVER__HOST", "value": "0.0.0.0"},
+                  {"name": "MOCKUP__SERVER__PORT", "value": "8080"}
+                ],
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/r-image-magic",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                  }
+                },
+                "healthCheck": {
+                  "command": ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"],
+                  "interval": 30,
+                  "timeout": 5,
+                  "retries": 3,
+                  "startPeriod": 60
+                }
+              }
+            ]
+          }
+          TASKEOF
+          )
+
+          # Inject dynamic values (image URI, GHCR credentials, DATABASE_URL secret)
+          TASK_DEF=$(echo "$TASK_DEF" | jq \
+            --arg img "$IMAGE_URI" \
+            --arg ghcr_arn "$GHCR_SECRET_ARN" \
+            --arg db_url "${{ secrets.MOCKUP_DATABASE_URL }}" \
+            '.containerDefinitions[0].image = $img |
+             .containerDefinitions[0].repositoryCredentials = {"credentialsParameter": $ghcr_arn} |
+             .containerDefinitions[0].environment += [{"name": "MOCKUP__DATABASE__URL", "value": $db_url}]')
+
+          # Register the task definition
+          NEW_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "$TASK_DEF" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          echo "task_arn=$NEW_ARN" >> $GITHUB_OUTPUT
+          echo "✅ Registered task definition: $NEW_ARN"
+
+      - name: Update ECS service
+        run: |
+          # Check if service exists
+          if aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_SERVICE }} --query 'services[0].status' --output text 2>/dev/null | grep -q ACTIVE; then
+            echo "Updating existing service..."
+            aws ecs update-service \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --service ${{ env.ECS_SERVICE }} \
+              --task-definition ${{ steps.register-task.outputs.task_arn }} \
+              --force-new-deployment
+          else
+            echo "⚠️ ECS service '${{ env.ECS_SERVICE }}' not found on cluster '${{ env.ECS_CLUSTER }}'."
+            echo "Create it manually first (needs target group, subnets, security groups)."
+            echo "See: SHARED_INFRA.md steps 4-5"
+            exit 1
+          fi
+
+      - name: Wait for deployment stability
+        run: |
+          echo "Waiting for ECS service to stabilize..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }}
+          echo "✅ Deployment complete: r-image-magic → ${{ needs.build.outputs.image_tag }}"
