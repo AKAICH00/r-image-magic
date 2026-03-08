@@ -76,87 +76,55 @@ jobs:
       - name: Get GHCR pull secret ARN
         id: ghcr-secret
         run: |
-          # Reuse existing GHCR credentials (shared across apps)
           GHCR_SECRET_ARN=$(aws secretsmanager describe-secret --secret-id "teeswim/ghcr-credentials" --query 'ARN' --output text 2>/dev/null || true)
-          if [ -z "$GHCR_SECRET_ARN" ] || [ "$GHCR_SECRET_ARN" = "None" ]; then
-            echo "⚠️ No GHCR secret found — ECS will only pull public images"
-            echo "arn=" >> $GITHUB_OUTPUT
-          else
+          if [ -n "$GHCR_SECRET_ARN" ] && [ "$GHCR_SECRET_ARN" != "None" ]; then
             echo "arn=$GHCR_SECRET_ARN" >> $GITHUB_OUTPUT
             echo "✅ Using GHCR secret: $GHCR_SECRET_ARN"
+          else
+            echo "arn=" >> $GITHUB_OUTPUT
           fi
 
-      - name: Ensure CloudWatch log group exists
-        run: |
-          aws logs create-log-group --log-group-name /ecs/r-image-magic 2>/dev/null || true
-
-      - name: Register task definition
+      - name: Fetch current task definition and update image + env
         id: register-task
         run: |
           IMAGE_URI="${{ env.IMAGE }}:${{ needs.build.outputs.image_tag }}"
           GHCR_SECRET_ARN="${{ steps.ghcr-secret.outputs.arn }}"
+          DB_URL="${{ secrets.MOCKUP_DATABASE_URL }}"
 
-          TASK_DEF=$(cat <<'TASKEOF'
-          {
-            "family": "r-image-magic",
-            "networkMode": "awsvpc",
-            "requiresCompatibilities": ["FARGATE"],
-            "cpu": "1024",
-            "memory": "2048",
-            "runtimePlatform": {
-              "cpuArchitecture": "ARM64",
-              "operatingSystemFamily": "LINUX"
-            },
-            "executionRoleArn": "arn:aws:iam::286119371519:role/ecsTaskExecutionRole",
-            "containerDefinitions": [
-              {
-                "name": "r-image-magic",
-                "essential": true,
-                "portMappings": [{"containerPort": 8080, "protocol": "tcp"}],
-                "environment": [
-                  {"name": "RUST_LOG", "value": "info"},
-                  {"name": "MOCKUP__SERVER__HOST", "value": "0.0.0.0"},
-                  {"name": "MOCKUP__SERVER__PORT", "value": "8080"}
-                ],
-                "logConfiguration": {
-                  "logDriver": "awslogs",
-                  "options": {
-                    "awslogs-group": "/ecs/r-image-magic",
-                    "awslogs-region": "us-east-1",
-                    "awslogs-stream-prefix": "ecs"
-                  }
-                },
-                "healthCheck": {
-                  "command": ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"],
-                  "interval": 30,
-                  "timeout": 5,
-                  "retries": 3,
-                  "startPeriod": 60
-                }
-              }
-            ]
-          }
-          TASKEOF
-          )
+          # Fetch existing task definition (preserves executionRoleArn, taskRoleArn, etc.)
+          TASK_DEF=$(aws ecs describe-task-definition \
+            --task-definition ${{ env.ECS_TASK_FAMILY }} \
+            --query 'taskDefinition')
 
-          # Inject dynamic values (image URI, GHCR credentials, DATABASE_URL)
+          # Strip fields that can't be passed back to register-task-definition
+          TASK_DEF=$(echo "$TASK_DEF" | jq 'del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .registeredAt,
+            .registeredBy,
+            .requiresAttributes,
+            .compatibilities
+          )')
+
+          # Update image
+          TASK_DEF=$(echo "$TASK_DEF" | jq --arg img "$IMAGE_URI" \
+            '.containerDefinitions[0].image = $img')
+
+          # Add/update GHCR credentials if available
           if [ -n "$GHCR_SECRET_ARN" ]; then
-            TASK_DEF=$(echo "$TASK_DEF" | jq \
-              --arg img "$IMAGE_URI" \
-              --arg ghcr_arn "$GHCR_SECRET_ARN" \
-              --arg db_url "${{ secrets.MOCKUP_DATABASE_URL }}" \
-              '.containerDefinitions[0].image = $img |
-               .containerDefinitions[0].repositoryCredentials = {"credentialsParameter": $ghcr_arn} |
-               .containerDefinitions[0].environment += [{"name": "MOCKUP__DATABASE__URL", "value": $db_url}]')
-          else
-            TASK_DEF=$(echo "$TASK_DEF" | jq \
-              --arg img "$IMAGE_URI" \
-              --arg db_url "${{ secrets.MOCKUP_DATABASE_URL }}" \
-              '.containerDefinitions[0].image = $img |
-               .containerDefinitions[0].environment += [{"name": "MOCKUP__DATABASE__URL", "value": $db_url}]')
+            TASK_DEF=$(echo "$TASK_DEF" | jq --arg arn "$GHCR_SECRET_ARN" \
+              '.containerDefinitions[0].repositoryCredentials = {"credentialsParameter": $arn}')
           fi
 
-          # Register the task definition
+          # Upsert DATABASE_URL into environment (replace if exists, add if not)
+          TASK_DEF=$(echo "$TASK_DEF" | jq --arg db_url "$DB_URL" '
+            .containerDefinitions[0].environment |= (
+              [.[] | select(.name != "MOCKUP__DATABASE__URL")] +
+              [{"name": "MOCKUP__DATABASE__URL", "value": $db_url}]
+            )')
+
+          # Register updated task definition
           NEW_ARN=$(aws ecs register-task-definition \
             --cli-input-json "$TASK_DEF" \
             --query 'taskDefinition.taskDefinitionArn' \
@@ -167,20 +135,14 @@ jobs:
 
       - name: Update ECS service
         run: |
-          # Check if service exists
-          if aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_SERVICE }} --query 'services[0].status' --output text 2>/dev/null | grep -q ACTIVE; then
-            echo "Updating existing service..."
-            aws ecs update-service \
-              --cluster ${{ env.ECS_CLUSTER }} \
-              --service ${{ env.ECS_SERVICE }} \
-              --task-definition ${{ steps.register-task.outputs.task_arn }} \
-              --force-new-deployment
-          else
-            echo "⚠️ ECS service '${{ env.ECS_SERVICE }}' not found on cluster '${{ env.ECS_CLUSTER }}'."
-            echo "Create it manually first (needs target group, subnets, security groups)."
-            echo "See: SHARED_INFRA.md steps 4-5"
-            exit 1
-          fi
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --task-definition ${{ steps.register-task.outputs.task_arn }} \
+            --force-new-deployment \
+            --query 'service.serviceName' \
+            --output text
+          echo "✅ Service update triggered"
 
       - name: Wait for deployment stability
         run: |
