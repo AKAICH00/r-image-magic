@@ -73,76 +73,15 @@ jobs:
           role-to-assume: arn:aws:iam::286119371519:role/github-actions-deploy
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Get GHCR pull secret ARN
-        id: ghcr-secret
-        run: |
-          GHCR_SECRET_ARN=$(aws secretsmanager describe-secret --secret-id "teeswim/ghcr-credentials" --query 'ARN' --output text 2>/dev/null || true)
-          if [ -n "$GHCR_SECRET_ARN" ] && [ "$GHCR_SECRET_ARN" != "None" ]; then
-            echo "arn=$GHCR_SECRET_ARN" >> $GITHUB_OUTPUT
-            echo "✅ Using GHCR secret: $GHCR_SECRET_ARN"
-          else
-            echo "arn=" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Fetch current task definition and update image + env
-        id: register-task
-        run: |
-          IMAGE_URI="${{ env.IMAGE }}:${{ needs.build.outputs.image_tag }}"
-          GHCR_SECRET_ARN="${{ steps.ghcr-secret.outputs.arn }}"
-          DB_URL="${{ secrets.MOCKUP_DATABASE_URL }}"
-
-          # Fetch existing task definition (preserves executionRoleArn, taskRoleArn, etc.)
-          TASK_DEF=$(aws ecs describe-task-definition \
-            --task-definition ${{ env.ECS_TASK_FAMILY }} \
-            --query 'taskDefinition')
-
-          # Strip fields that can't be passed back to register-task-definition
-          TASK_DEF=$(echo "$TASK_DEF" | jq 'del(
-            .taskDefinitionArn,
-            .revision,
-            .status,
-            .registeredAt,
-            .registeredBy,
-            .requiresAttributes,
-            .compatibilities
-          )')
-
-          # Update image
-          TASK_DEF=$(echo "$TASK_DEF" | jq --arg img "$IMAGE_URI" \
-            '.containerDefinitions[0].image = $img')
-
-          # Add/update GHCR credentials if available
-          if [ -n "$GHCR_SECRET_ARN" ]; then
-            TASK_DEF=$(echo "$TASK_DEF" | jq --arg arn "$GHCR_SECRET_ARN" \
-              '.containerDefinitions[0].repositoryCredentials = {"credentialsParameter": $arn}')
-          fi
-
-          # Upsert DATABASE_URL into environment (replace if exists, add if not)
-          TASK_DEF=$(echo "$TASK_DEF" | jq --arg db_url "$DB_URL" '
-            .containerDefinitions[0].environment |= (
-              [.[] | select(.name != "MOCKUP__DATABASE__URL")] +
-              [{"name": "MOCKUP__DATABASE__URL", "value": $db_url}]
-            )')
-
-          # Register updated task definition
-          NEW_ARN=$(aws ecs register-task-definition \
-            --cli-input-json "$TASK_DEF" \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
-
-          echo "task_arn=$NEW_ARN" >> $GITHUB_OUTPUT
-          echo "✅ Registered task definition: $NEW_ARN"
-
-      - name: Update ECS service
+      - name: Force new deployment (pulls latest image)
         run: |
           aws ecs update-service \
             --cluster ${{ env.ECS_CLUSTER }} \
             --service ${{ env.ECS_SERVICE }} \
-            --task-definition ${{ steps.register-task.outputs.task_arn }} \
             --force-new-deployment \
             --query 'service.serviceName' \
             --output text
-          echo "✅ Service update triggered"
+          echo "✅ Deployment triggered — ECS will pull latest image"
 
       - name: Wait for deployment stability
         run: |
@@ -150,4 +89,4 @@ jobs:
           aws ecs wait services-stable \
             --cluster ${{ env.ECS_CLUSTER }} \
             --services ${{ env.ECS_SERVICE }}
-          echo "✅ Deployment complete: r-image-magic → ${{ needs.build.outputs.image_tag }}"
+          echo "✅ Deployment complete"
