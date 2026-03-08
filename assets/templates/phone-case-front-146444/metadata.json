@@ -1,0 +1,37 @@
+{
+  "id": "phone-case-front-146444",
+  "name": "Phone Case (Front)",
+  "version": 1,
+  "category": "phone-case",
+  "color": "white",
+  "color_hex": "#ffffff",
+  "placement": "front",
+  "product": "Phone Case",
+  "product_type": "phone-case",
+  "printful_product_id": 601,
+  "printful_template_id": 146444,
+  "dimensions": {
+    "width": 728,
+    "height": 728
+  },
+  "print_area": {
+    "x": 197,
+    "y": 97,
+    "width": 336,
+    "height": 534
+  },
+  "anchor_point": {
+    "x": 365,
+    "y": 364
+  },
+  "displacement": {
+    "enabled": false,
+    "strength_default": 1.0,
+    "strength_range": [
+      0.5,
+      2.0
+    ]
+  },
+  "blend_mode": "multiply",
+  "default_opacity": 240
+}

@@ -1,0 +1,37 @@
+{
+  "id": "mug-15oz-front-91022",
+  "name": "Mug 15oz (Front)",
+  "version": 1,
+  "category": "mug-15oz",
+  "color": "white",
+  "color_hex": null,
+  "placement": "front",
+  "product": "Mug 15oz",
+  "product_type": "mug-15oz",
+  "printful_product_id": 534,
+  "printful_template_id": 91022,
+  "dimensions": {
+    "width": 728,
+    "height": 728
+  },
+  "print_area": {
+    "x": 11,
+    "y": 28,
+    "width": 707,
+    "height": 565
+  },
+  "anchor_point": {
+    "x": 364,
+    "y": 310
+  },
+  "displacement": {
+    "enabled": false,
+    "strength_default": 1.0,
+    "strength_range": [
+      0.5,
+      2.0
+    ]
+  },
+  "blend_mode": "multiply",
+  "default_opacity": 240
+}

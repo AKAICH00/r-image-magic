@@ -1,0 +1,37 @@
+{
+  "id": "hoodie-aop-front-47694",
+  "name": "AOP Hoodie (Front)",
+  "version": 1,
+  "category": "hoodie-aop",
+  "color": "white",
+  "color_hex": "#080808",
+  "placement": "front",
+  "product": "AOP Hoodie",
+  "product_type": "hoodie-aop",
+  "printful_product_id": 380,
+  "printful_template_id": 47694,
+  "dimensions": {
+    "width": 728,
+    "height": 728
+  },
+  "print_area": {
+    "x": 251,
+    "y": 182,
+    "width": 228,
+    "height": 228
+  },
+  "anchor_point": {
+    "x": 365,
+    "y": 296
+  },
+  "displacement": {
+    "enabled": true,
+    "strength_default": 8.0,
+    "strength_range": [
+      4.0,
+      16.0
+    ]
+  },
+  "blend_mode": "multiply",
+  "default_opacity": 240
+}

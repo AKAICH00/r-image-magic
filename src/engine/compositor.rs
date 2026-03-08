@@ -75,8 +75,10 @@ impl Compositor {
         // 1. Fetch design image
         let design = self.fetch_design(&request.design_url).await?;
 
-        // 1.5. Remove white background from design (handles JPEG images)
-        let design = self.remove_white_background(&design);
+        // NOTE: White background removal is intentionally skipped for seamless/AOP patterns.
+        // Patterns fill the entire print area — removing white would punch holes in the design.
+        // Re-enable only for logo/artwork-on-white-bg use cases.
+        // let design = self.remove_white_background(&design);
 
         // 2. Resize design according to placement
         let (design_width, design_height) = request.placement.get_design_dimensions();
@@ -86,22 +88,29 @@ impl Compositor {
             image::imageops::FilterType::Lanczos3,
         );
 
+        // 4. Composite position (needed before displacement crop)
+        let (rel_x, rel_y) = request.placement.get_absolute_position();
+        let abs_x = rel_x + template.metadata.print_area.x as i32;
+        let abs_y = rel_y + template.metadata.print_area.y as i32;
+
         // 3. Apply displacement mapping if available
+        // Crop the displacement map to the exact region where the design lands,
+        // so fabric wrinkles match the actual print position (not the whole shirt scaled down).
         let processed_design = if let Some(ref disp_map) = template.displacement_map {
             if template.metadata.displacement.enabled {
-                apply_displacement(&resized_design, disp_map, request.displacement_strength)
+                let (disp_w, disp_h) = disp_map.dimensions();
+                let crop_x = (abs_x.max(0) as u32).min(disp_w.saturating_sub(1));
+                let crop_y = (abs_y.max(0) as u32).min(disp_h.saturating_sub(1));
+                let crop_w = (design_width as u32).min(disp_w.saturating_sub(crop_x));
+                let crop_h = (design_height as u32).min(disp_h.saturating_sub(crop_y));
+                let disp_crop = disp_map.crop_imm(crop_x, crop_y, crop_w, crop_h);
+                apply_displacement(&resized_design, &disp_crop, request.displacement_strength)
             } else {
                 resized_design
             }
         } else {
             resized_design
         };
-
-        // 4. Composite onto template
-        // Get position relative to print area, then add the print area's offset on the base image
-        let (rel_x, rel_y) = request.placement.get_absolute_position();
-        let abs_x = rel_x + template.metadata.print_area.x as i32;
-        let abs_y = rel_y + template.metadata.print_area.y as i32;
 
         debug!(
             rel_x = rel_x,

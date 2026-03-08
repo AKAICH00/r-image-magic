@@ -1,0 +1,37 @@
+{
+  "id": "wrapping-paper-front-196986",
+  "name": "Wrapping Paper (Front)",
+  "version": 1,
+  "category": "wrapping-paper",
+  "color": "white",
+  "color_hex": "#ffffff",
+  "placement": "front",
+  "product": "Wrapping Paper",
+  "product_type": "wrapping-paper",
+  "printful_product_id": 706,
+  "printful_template_id": 196986,
+  "dimensions": {
+    "width": 728,
+    "height": 728
+  },
+  "print_area": {
+    "x": 4,
+    "y": 115,
+    "width": 720,
+    "height": 499
+  },
+  "anchor_point": {
+    "x": 364,
+    "y": 364
+  },
+  "displacement": {
+    "enabled": true,
+    "strength_default": 8.0,
+    "strength_range": [
+      4.0,
+      16.0
+    ]
+  },
+  "blend_mode": "multiply",
+  "default_opacity": 240
+}

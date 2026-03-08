@@ -1,0 +1,37 @@
+{
+  "id": "pillow-front-22668",
+  "name": "Pillow 18x18 (Front)",
+  "version": 1,
+  "category": "pillow",
+  "color": "white",
+  "color_hex": null,
+  "placement": "front",
+  "product": "Pillow 18x18",
+  "product_type": "pillow",
+  "printful_product_id": 83,
+  "printful_template_id": 22668,
+  "dimensions": {
+    "width": 3000,
+    "height": 3000
+  },
+  "print_area": {
+    "x": 146,
+    "y": 14,
+    "width": 2717,
+    "height": 2717
+  },
+  "anchor_point": {
+    "x": 1504,
+    "y": 1372
+  },
+  "displacement": {
+    "enabled": true,
+    "strength_default": 4.0,
+    "strength_range": [
+      2.0,
+      8.0
+    ]
+  },
+  "blend_mode": "multiply",
+  "default_opacity": 240
+}
