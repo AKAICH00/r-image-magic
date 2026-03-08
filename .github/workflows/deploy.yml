@@ -73,35 +73,28 @@ jobs:
           role-to-assume: arn:aws:iam::286119371519:role/github-actions-deploy
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Ensure GHCR pull secret exists in Secrets Manager
+      - name: Get GHCR pull secret ARN
+        id: ghcr-secret
         run: |
-          SECRET_NAME="r-image-magic/ghcr-credentials"
-          if ! aws secretsmanager describe-secret --secret-id "$SECRET_NAME" 2>/dev/null; then
-            echo "Creating GHCR pull secret..."
-            aws secretsmanager create-secret \
-              --name "$SECRET_NAME" \
-              --secret-string '{"username":"${{ github.actor }}","password":"${{ secrets.CR_PAT }}"}'
+          # Reuse existing GHCR credentials (shared across apps)
+          GHCR_SECRET_ARN=$(aws secretsmanager describe-secret --secret-id "teeswim/ghcr-credentials" --query 'ARN' --output text 2>/dev/null || true)
+          if [ -z "$GHCR_SECRET_ARN" ] || [ "$GHCR_SECRET_ARN" = "None" ]; then
+            echo "⚠️ No GHCR secret found — ECS will only pull public images"
+            echo "arn=" >> $GITHUB_OUTPUT
+          else
+            echo "arn=$GHCR_SECRET_ARN" >> $GITHUB_OUTPUT
+            echo "✅ Using GHCR secret: $GHCR_SECRET_ARN"
           fi
 
       - name: Ensure CloudWatch log group exists
         run: |
           aws logs create-log-group --log-group-name /ecs/r-image-magic 2>/dev/null || true
 
-      - name: Get current task definition
-        id: current-task
-        run: |
-          # Check if task definition exists
-          if aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK_FAMILY }} 2>/dev/null; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Register task definition
         id: register-task
         run: |
           IMAGE_URI="${{ env.IMAGE }}:${{ needs.build.outputs.image_tag }}"
-          GHCR_SECRET_ARN=$(aws secretsmanager describe-secret --secret-id "r-image-magic/ghcr-credentials" --query 'ARN' --output text)
+          GHCR_SECRET_ARN="${{ steps.ghcr-secret.outputs.arn }}"
 
           TASK_DEF=$(cat <<'TASKEOF'
           {
@@ -146,14 +139,22 @@ jobs:
           TASKEOF
           )
 
-          # Inject dynamic values (image URI, GHCR credentials, DATABASE_URL secret)
-          TASK_DEF=$(echo "$TASK_DEF" | jq \
-            --arg img "$IMAGE_URI" \
-            --arg ghcr_arn "$GHCR_SECRET_ARN" \
-            --arg db_url "${{ secrets.MOCKUP_DATABASE_URL }}" \
-            '.containerDefinitions[0].image = $img |
-             .containerDefinitions[0].repositoryCredentials = {"credentialsParameter": $ghcr_arn} |
-             .containerDefinitions[0].environment += [{"name": "MOCKUP__DATABASE__URL", "value": $db_url}]')
+          # Inject dynamic values (image URI, GHCR credentials, DATABASE_URL)
+          if [ -n "$GHCR_SECRET_ARN" ]; then
+            TASK_DEF=$(echo "$TASK_DEF" | jq \
+              --arg img "$IMAGE_URI" \
+              --arg ghcr_arn "$GHCR_SECRET_ARN" \
+              --arg db_url "${{ secrets.MOCKUP_DATABASE_URL }}" \
+              '.containerDefinitions[0].image = $img |
+               .containerDefinitions[0].repositoryCredentials = {"credentialsParameter": $ghcr_arn} |
+               .containerDefinitions[0].environment += [{"name": "MOCKUP__DATABASE__URL", "value": $db_url}]')
+          else
+            TASK_DEF=$(echo "$TASK_DEF" | jq \
+              --arg img "$IMAGE_URI" \
+              --arg db_url "${{ secrets.MOCKUP_DATABASE_URL }}" \
+              '.containerDefinitions[0].image = $img |
+               .containerDefinitions[0].environment += [{"name": "MOCKUP__DATABASE__URL", "value": $db_url}]')
+          fi
 
           # Register the task definition
           NEW_ARN=$(aws ecs register-task-definition \
