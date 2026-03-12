@@ -1,15 +1,15 @@
 //! Template management and loading
 
+use image::{DynamicImage, ImageError};
+use parking_lot::RwLock;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use parking_lot::RwLock;
-use image::{DynamicImage, ImageError};
-use serde::Deserialize;
 use thiserror::Error;
 use tracing::{info, warn};
 
-use super::compositor::{MockupRequest, MockupResult, Compositor};
+use super::compositor::{Compositor, MockupRequest, MockupResult};
 
 /// Template-related errors
 #[derive(Debug, Error)]
@@ -33,15 +33,31 @@ pub struct TemplateMetadata {
     pub version: u32,
     pub category: String,
     pub color: String,
-    pub color_hex: String,
+    #[serde(default)]
+    pub color_hex: Option<String>,
     pub placement: String,
-    pub gender: String,
+    #[serde(default)]
+    pub gender: Option<String>,
     pub dimensions: TemplateDimensions,
     pub print_area: PrintArea,
     pub anchor_point: AnchorPoint,
     pub displacement: DisplacementConfig,
     pub blend_mode: String,
     pub default_opacity: u8,
+    // Printful sync fields
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub product: Option<String>,
+    #[serde(default)]
+    pub product_type: Option<String>,
+    #[serde(default)]
+    pub printful_product_id: Option<u64>,
+    #[serde(default)]
+    pub printful_template_id: Option<u64>,
+    // Zone definitions from working templates
+    #[serde(default)]
+    pub zones: Option<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -83,8 +99,9 @@ impl Template {
     pub fn load(path: &Path) -> Result<Self, TemplateError> {
         // Load metadata
         let metadata_path = path.join("metadata.json");
-        let metadata_content = std::fs::read_to_string(&metadata_path)
-            .map_err(|e| TemplateError::MetadataLoad(format!("{}: {}", metadata_path.display(), e)))?;
+        let metadata_content = std::fs::read_to_string(&metadata_path).map_err(|e| {
+            TemplateError::MetadataLoad(format!("{}: {}", metadata_path.display(), e))
+        })?;
         let metadata: TemplateMetadata = serde_json::from_str(&metadata_content)?;
 
         // Load base image
@@ -154,7 +171,10 @@ impl TemplateManager {
             let mut loaded = HashMap::new();
 
             if !base_path.exists() {
-                warn!("Templates directory does not exist: {}", base_path.display());
+                warn!(
+                    "Templates directory does not exist: {}",
+                    base_path.display()
+                );
                 return Ok(loaded);
             }
 
@@ -211,11 +231,17 @@ impl TemplateManager {
     }
 
     /// Generate a mockup using the compositor
-    pub async fn generate_mockup(&self, request: &MockupRequest) -> Result<MockupResult, TemplateError> {
-        let template = self.get(&request.template_id)
+    pub async fn generate_mockup(
+        &self,
+        request: &MockupRequest,
+    ) -> Result<MockupResult, TemplateError> {
+        let template = self
+            .get(&request.template_id)
             .ok_or_else(|| TemplateError::NotFound(request.template_id.clone()))?;
 
-        self.compositor.generate(request, &template).await
+        self.compositor
+            .generate(request, &template)
+            .await
             .map_err(|e| TemplateError::MetadataLoad(format!("Compositor error: {}", e)))
     }
 }
