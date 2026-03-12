@@ -3,7 +3,9 @@
 //! This module provides a rate-limited HTTP client wrapper that respects
 //! provider API rate limits and handles retries with exponential backoff.
 
-use governor::{Quota, RateLimiter, state::NotKeyed, clock::DefaultClock, middleware::NoOpMiddleware};
+use governor::{
+    clock::DefaultClock, middleware::NoOpMiddleware, state::NotKeyed, Quota, RateLimiter,
+};
 use reqwest::{Client, RequestBuilder, Response};
 use std::num::NonZeroU32;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -144,7 +146,11 @@ impl RateLimitedClient {
 
         for attempt in 0..=max_retries {
             if attempt > 0 {
-                debug!(attempt, backoff_ms = backoff.as_millis(), "Retrying request");
+                debug!(
+                    attempt,
+                    backoff_ms = backoff.as_millis(),
+                    "Retrying request"
+                );
                 tokio::time::sleep(backoff).await;
                 backoff = (backoff * 2).min(Duration::from_secs(30));
             }
@@ -212,7 +218,9 @@ impl<'a> RateLimitedRequestBuilder<'a> {
 
     /// Send with retries
     pub async fn send_with_retry(self, max_retries: u32) -> Result<Response, ProviderError> {
-        self.client.execute_with_retry(self.builder, max_retries).await
+        self.client
+            .execute_with_retry(self.builder, max_retries)
+            .await
     }
 }
 

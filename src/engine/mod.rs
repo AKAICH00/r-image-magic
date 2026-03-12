@@ -5,9 +5,9 @@
 //! - Displacement mapping algorithm
 //! - Image compositing pipeline
 
-mod template;
 mod compositor;
 mod displacement;
+mod template;
 
-pub use template::TemplateManager;
 pub use compositor::MockupRequest;
+pub use template::TemplateManager;

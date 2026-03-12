@@ -8,15 +8,13 @@
 use async_trait::async_trait;
 use tracing::{debug, info, warn};
 
-use crate::providers::traits::{
-    PodProvider, ProviderResult, ProviderError, CatalogPage, ProviderCredentials
-};
-use crate::providers::http_client::RateLimitedClient;
-use crate::domain::catalog::{
-    UnifiedProduct, UnifiedVariant, UnifiedPrintArea, MockupAsset
-};
-use super::models::*;
 use super::mapper::PrintfulMapper;
+use super::models::*;
+use crate::domain::catalog::{MockupAsset, UnifiedPrintArea, UnifiedProduct, UnifiedVariant};
+use crate::providers::http_client::RateLimitedClient;
+use crate::providers::traits::{
+    CatalogPage, PodProvider, ProviderCredentials, ProviderError, ProviderResult,
+};
 
 /// Printful API client
 pub struct PrintfulProvider {
@@ -46,17 +44,15 @@ impl PrintfulProvider {
 
     /// Make an authenticated GET request
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> ProviderResult<T> {
-        let token = self.access_token.as_ref()
+        let token = self
+            .access_token
+            .as_ref()
             .ok_or_else(|| ProviderError::AuthFailed("No access token configured".to_string()))?;
 
         let url = format!("{}{}", self.base_url, path);
         debug!(url = %url, "Printful API request");
 
-        let response = self.client
-            .get(&url)
-            .bearer_auth(token)
-            .send()
-            .await?;
+        let response = self.client.get(&url).bearer_auth(token).send().await?;
 
         // Check for error status
         let status = response.status();
@@ -70,8 +66,13 @@ impl PrintfulProvider {
 
         // Parse JSON response
         let text = response.text().await?;
-        serde_json::from_str(&text)
-            .map_err(|e| ProviderError::ParseError(format!("JSON parse error: {} - Body: {}", e, &text[..text.len().min(500)])))
+        serde_json::from_str(&text).map_err(|e| {
+            ProviderError::ParseError(format!(
+                "JSON parse error: {} - Body: {}",
+                e,
+                &text[..text.len().min(500)]
+            ))
+        })
     }
 }
 
@@ -96,7 +97,7 @@ impl PodProvider for PrintfulProvider {
     async fn authenticate(&mut self) -> ProviderResult<()> {
         if self.access_token.is_none() {
             return Err(ProviderError::NotConfigured(
-                "PRINTFUL_ACCESS_TOKEN environment variable not set".to_string()
+                "PRINTFUL_ACCESS_TOKEN environment variable not set".to_string(),
             ));
         }
 
@@ -109,9 +110,9 @@ impl PodProvider for PrintfulProvider {
                 info!("Printful authentication successful");
                 Ok(())
             }
-            Err(ProviderError::ApiError { status: 401, .. }) => {
-                Err(ProviderError::AuthFailed("Invalid access token".to_string()))
-            }
+            Err(ProviderError::ApiError { status: 401, .. }) => Err(ProviderError::AuthFailed(
+                "Invalid access token".to_string(),
+            )),
             Err(e) => Err(e),
         }
     }
@@ -125,18 +126,24 @@ impl PodProvider for PrintfulProvider {
         self.authenticate().await
     }
 
-    async fn get_products(&self, page: u32, per_page: u32) -> ProviderResult<CatalogPage<UnifiedProduct>> {
+    async fn get_products(
+        &self,
+        page: u32,
+        per_page: u32,
+    ) -> ProviderResult<CatalogPage<UnifiedProduct>> {
         let offset = (page - 1) * per_page;
         let path = format!("/products?offset={}&limit={}", offset, per_page);
 
         let response: PrintfulResponse<Vec<PrintfulProduct>> = self.get(&path).await?;
 
-        let items: Vec<UnifiedProduct> = response.result
+        let items: Vec<UnifiedProduct> = response
+            .result
             .into_iter()
             .map(PrintfulMapper::map_product)
             .collect();
 
-        let total = response.paging
+        let total = response
+            .paging
             .map(|p| p.total as u64)
             .unwrap_or(items.len() as u64);
 
@@ -156,7 +163,9 @@ impl PodProvider for PrintfulProvider {
 
         let response: PrintfulResponse<PrintfulProductDetail> = self.get(&path).await?;
 
-        let variants: Vec<UnifiedVariant> = response.result.variants
+        let variants: Vec<UnifiedVariant> = response
+            .result
+            .variants
             .into_iter()
             .map(PrintfulMapper::map_variant)
             .collect();
@@ -164,7 +173,10 @@ impl PodProvider for PrintfulProvider {
         Ok(variants)
     }
 
-    async fn get_print_areas(&self, product_external_id: &str) -> ProviderResult<Vec<UnifiedPrintArea>> {
+    async fn get_print_areas(
+        &self,
+        product_external_id: &str,
+    ) -> ProviderResult<Vec<UnifiedPrintArea>> {
         let path = format!("/mockup-generator/printfiles/{}", product_external_id);
 
         let response: PrintfulResponse<PrintfulPrintfilesResponse> = self.get(&path).await?;
@@ -181,7 +193,10 @@ impl PodProvider for PrintfulProvider {
 
         let response: PrintfulResponse<PrintfulMockupTemplatesResponse> = self.get(&path).await?;
 
-        Ok(PrintfulMapper::map_mockup_assets(response.result, variant_external_id))
+        Ok(PrintfulMapper::map_mockup_assets(
+            response.result,
+            variant_external_id,
+        ))
     }
 
     fn rate_limit_remaining(&self) -> Option<u32> {

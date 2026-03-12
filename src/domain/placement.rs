@@ -88,8 +88,12 @@ pub struct PlacementSpec {
     pub coordinate_space: CoordinateSpace,
 }
 
-fn default_print_width() -> i32 { PRINT_TEMPLATE_WIDTH }
-fn default_print_height() -> i32 { PRINT_TEMPLATE_HEIGHT }
+fn default_print_width() -> i32 {
+    PRINT_TEMPLATE_WIDTH
+}
+fn default_print_height() -> i32 {
+    PRINT_TEMPLATE_HEIGHT
+}
 
 impl PlacementSpec {
     /// Create a new placement specification
@@ -232,7 +236,10 @@ mod tests {
     fn test_invalid_scale() {
         let mut spec = PlacementSpec::default();
         spec.scale = 1.5;
-        assert!(matches!(spec.validate(), Err(PlacementError::InvalidScale(_))));
+        assert!(matches!(
+            spec.validate(),
+            Err(PlacementError::InvalidScale(_))
+        ));
     }
 
     #[test]

@@ -2,11 +2,11 @@
 
 use actix_web::{web, HttpResponse};
 use serde::Serialize;
-use tracing::{info, error};
+use tracing::{error, info};
 use utoipa::ToSchema;
 
-use crate::AppState;
 use crate::db::models::TemplateInfo;
+use crate::AppState;
 
 /// Response for listing templates
 #[derive(Serialize, ToSchema)]
@@ -114,10 +114,7 @@ pub async fn list_templates(state: web::Data<AppState>) -> HttpResponse {
         (status = 503, description = "Database not available", body = TemplateErrorResponse)
     )
 )]
-pub async fn get_template(
-    state: web::Data<AppState>,
-    path: web::Path<String>,
-) -> HttpResponse {
+pub async fn get_template(state: web::Data<AppState>, path: web::Path<String>) -> HttpResponse {
     let template_id = path.into_inner();
 
     let repo = match &state.template_repo {
@@ -142,15 +139,13 @@ pub async fn get_template(
                 data: template.into(),
             })
         }
-        Ok(None) => {
-            HttpResponse::NotFound().json(TemplateErrorResponse {
-                success: false,
-                error: TemplateApiError {
-                    code: "TEMPLATE_NOT_FOUND".to_string(),
-                    message: format!("Template '{}' does not exist", template_id),
-                },
-            })
-        }
+        Ok(None) => HttpResponse::NotFound().json(TemplateErrorResponse {
+            success: false,
+            error: TemplateApiError {
+                code: "TEMPLATE_NOT_FOUND".to_string(),
+                message: format!("Template '{}' does not exist", template_id),
+            },
+        }),
         Err(e) => {
             error!(error = %e, template_id = %template_id, "Failed to fetch template");
             HttpResponse::InternalServerError().json(TemplateErrorResponse {
@@ -192,7 +187,10 @@ pub async fn list_product_types(state: web::Data<AppState>) -> HttpResponse {
         Ok(counts) => {
             let data: Vec<ProductTypeCount> = counts
                 .into_iter()
-                .map(|(product_type, count)| ProductTypeCount { product_type, count })
+                .map(|(product_type, count)| ProductTypeCount {
+                    product_type,
+                    count,
+                })
                 .collect();
 
             info!(count = data.len(), "Retrieved product types");

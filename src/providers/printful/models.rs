@@ -186,8 +186,8 @@ impl PrintfulVariant {
 
     /// Parse price as cents
     pub fn price_cents(&self) -> Option<i32> {
-        self.price.as_ref().and_then(|p| {
-            p.parse::<f64>().ok().map(|f| (f * 100.0) as i32)
-        })
+        self.price
+            .as_ref()
+            .and_then(|p| p.parse::<f64>().ok().map(|f| (f * 100.0) as i32))
     }
 }

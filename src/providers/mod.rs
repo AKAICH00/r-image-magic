@@ -17,17 +17,12 @@
 //! └───────┘   └────────┘  └────────┘  └──────┘   └────────┘
 //! ```
 
-pub mod traits;
 pub mod http_client;
 pub mod printful;
+pub mod traits;
 
 // Re-export commonly used types
-pub use traits::{
-    PodProvider,
-    ProviderError,
-    ProviderResult,
-    CatalogPage,
-    ProviderCredentials,
-    ProviderFactory,
-};
 pub use http_client::RateLimitedClient;
+pub use traits::{
+    CatalogPage, PodProvider, ProviderCredentials, ProviderError, ProviderFactory, ProviderResult,
+};

@@ -6,5 +6,5 @@
 mod asset_sync;
 mod orchestrator;
 
-pub use asset_sync::{AssetSyncer, AssetSyncResult, AssetSyncError};
-pub use orchestrator::{SyncOrchestrator, SyncJob, SyncJobStatus, SyncJobType};
+pub use asset_sync::{AssetSyncError, AssetSyncResult, AssetSyncer};
+pub use orchestrator::{SyncJob, SyncJobStatus, SyncJobType, SyncOrchestrator};

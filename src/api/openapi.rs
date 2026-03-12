@@ -3,18 +3,18 @@
 use utoipa::OpenApi;
 
 use crate::api::handlers::{
-    health::HealthResponse,
     generate::{
-        GenerateRequest, GenerateOptions, GenerateResponse,
-        GenerateMetadata, Dimensions, ErrorResponse, ApiError
+        ApiError, Dimensions, ErrorResponse, GenerateMetadata, GenerateOptions, GenerateRequest,
+        GenerateResponse,
     },
+    health::HealthResponse,
     templates::{
-        TemplatesListResponse, TemplateResponse, ProductTypesResponse,
-        ProductTypeCount, TemplateErrorResponse, TemplateApiError
+        ProductTypeCount, ProductTypesResponse, TemplateApiError, TemplateErrorResponse,
+        TemplateResponse, TemplatesListResponse,
     },
 };
-use crate::db::models::{TemplateInfo, DimensionsInfo, PrintAreaInfo};
-use crate::domain::{PlacementSpec, PlacementType, CoordinateSpace};
+use crate::db::models::{DimensionsInfo, PrintAreaInfo, TemplateInfo};
+use crate::domain::{CoordinateSpace, PlacementSpec, PlacementType};
 
 #[derive(OpenApi)]
 #[openapi(

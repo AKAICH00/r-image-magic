@@ -247,7 +247,12 @@ pub struct UnifiedProduct {
 
 impl UnifiedProduct {
     /// Create a new unified product with minimal required fields
-    pub fn new(external_id: String, provider_code: String, name: String, product_type: ProductType) -> Self {
+    pub fn new(
+        external_id: String,
+        provider_code: String,
+        name: String,
+        product_type: ProductType,
+    ) -> Self {
         let category_slug = product_type.category_slug().to_string();
         UnifiedProduct {
             external_id,
@@ -592,13 +597,19 @@ mod tests {
         assert_eq!(ProductType::from_str("T-Shirt"), ProductType::Tshirt);
         assert_eq!(ProductType::from_str("hoodie"), ProductType::Hoodie);
         assert_eq!(ProductType::from_str("Coffee Mug"), ProductType::Mug);
-        assert!(matches!(ProductType::from_str("Unknown Item"), ProductType::Other(_)));
+        assert!(matches!(
+            ProductType::from_str("Unknown Item"),
+            ProductType::Other(_)
+        ));
     }
 
     #[test]
     fn test_print_placement_from_str() {
         assert_eq!(PrintPlacement::from_str("Front"), PrintPlacement::Front);
-        assert_eq!(PrintPlacement::from_str("Left Sleeve"), PrintPlacement::SleeveLeft);
+        assert_eq!(
+            PrintPlacement::from_str("Left Sleeve"),
+            PrintPlacement::SleeveLeft
+        );
     }
 
     #[test]

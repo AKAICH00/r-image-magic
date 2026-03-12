@@ -1,9 +1,9 @@
 //! API key database operations
 
-use super::pool::{DbPool, DbError};
+use super::pool::{DbError, DbPool};
 use chrono::{DateTime, Utc};
 use rand::Rng;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -152,7 +152,10 @@ impl ApiKeyRepository {
     }
 
     /// Create a new API key
-    pub async fn create(&self, request: CreateApiKeyRequest) -> Result<CreateApiKeyResponse, DbError> {
+    pub async fn create(
+        &self,
+        request: CreateApiKeyRequest,
+    ) -> Result<CreateApiKeyResponse, DbError> {
         let client = self.pool.get().await?;
 
         // Generate key and hash
@@ -161,32 +164,36 @@ impl ApiKeyRepository {
         let key_hash = Self::hash_api_key(&api_key);
 
         // Use tier defaults if not specified
-        let rate_limit = request.rate_limit_per_minute
+        let rate_limit = request
+            .rate_limit_per_minute
             .unwrap_or_else(|| request.tier.default_rate_limit());
-        let monthly_quota = request.monthly_quota
+        let monthly_quota = request
+            .monthly_quota
             .unwrap_or_else(|| request.tier.default_monthly_quota());
 
-        let row = client.query_one(
-            r#"
+        let row = client
+            .query_one(
+                r#"
             INSERT INTO api_keys (
                 key_prefix, key_hash, name, owner_email, owner_name, company,
                 tier, rate_limit_per_minute, monthly_quota, expires_at
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING id
             "#,
-            &[
-                &key_prefix,
-                &key_hash,
-                &request.name,
-                &request.owner_email,
-                &request.owner_name,
-                &request.company,
-                &request.tier.as_str(),
-                &rate_limit,
-                &monthly_quota,
-                &request.expires_at,
-            ]
-        ).await?;
+                &[
+                    &key_prefix,
+                    &key_hash,
+                    &request.name,
+                    &request.owner_email,
+                    &request.owner_name,
+                    &request.company,
+                    &request.tier.as_str(),
+                    &rate_limit,
+                    &monthly_quota,
+                    &request.expires_at,
+                ],
+            )
+            .await?;
 
         let id: Uuid = row.get("id");
 
@@ -220,8 +227,9 @@ impl ApiKeyRepository {
         let key_prefix = &api_key[..12];
         let key_hash = Self::hash_api_key(api_key);
 
-        let row = client.query_opt(
-            r#"
+        let row = client
+            .query_opt(
+                r#"
             SELECT
                 id, key_prefix, key_hash, name, owner_email, owner_name, company,
                 tier, rate_limit_per_minute, monthly_quota, is_active,
@@ -229,8 +237,9 @@ impl ApiKeyRepository {
             FROM api_keys
             WHERE key_prefix = $1 AND key_hash = $2
             "#,
-            &[&key_prefix, &key_hash]
-        ).await?;
+                &[&key_prefix, &key_hash],
+            )
+            .await?;
 
         Ok(row.map(|row| DbApiKey {
             id: row.get("id"),
@@ -255,10 +264,12 @@ impl ApiKeyRepository {
     pub async fn touch(&self, key_id: Uuid) -> Result<(), DbError> {
         let client = self.pool.get().await?;
 
-        client.execute(
-            "UPDATE api_keys SET last_used_at = NOW() WHERE id = $1",
-            &[&key_id]
-        ).await?;
+        client
+            .execute(
+                "UPDATE api_keys SET last_used_at = NOW() WHERE id = $1",
+                &[&key_id],
+            )
+            .await?;
 
         Ok(())
     }
@@ -267,8 +278,9 @@ impl ApiKeyRepository {
     pub async fn get_by_id(&self, id: Uuid) -> Result<Option<DbApiKey>, DbError> {
         let client = self.pool.get().await?;
 
-        let row = client.query_opt(
-            r#"
+        let row = client
+            .query_opt(
+                r#"
             SELECT
                 id, key_prefix, key_hash, name, owner_email, owner_name, company,
                 tier, rate_limit_per_minute, monthly_quota, is_active,
@@ -276,8 +288,9 @@ impl ApiKeyRepository {
             FROM api_keys
             WHERE id = $1
             "#,
-            &[&id]
-        ).await?;
+                &[&id],
+            )
+            .await?;
 
         Ok(row.map(|row| DbApiKey {
             id: row.get("id"),
@@ -302,8 +315,9 @@ impl ApiKeyRepository {
     pub async fn list_by_owner(&self, owner_email: &str) -> Result<Vec<DbApiKey>, DbError> {
         let client = self.pool.get().await?;
 
-        let rows = client.query(
-            r#"
+        let rows = client
+            .query(
+                r#"
             SELECT
                 id, key_prefix, key_hash, name, owner_email, owner_name, company,
                 tier, rate_limit_per_minute, monthly_quota, is_active,
@@ -312,36 +326,42 @@ impl ApiKeyRepository {
             WHERE owner_email = $1
             ORDER BY created_at DESC
             "#,
-            &[&owner_email]
-        ).await?;
+                &[&owner_email],
+            )
+            .await?;
 
-        Ok(rows.iter().map(|row| DbApiKey {
-            id: row.get("id"),
-            key_prefix: row.get("key_prefix"),
-            key_hash: row.get("key_hash"),
-            name: row.get("name"),
-            owner_email: row.get("owner_email"),
-            owner_name: row.get("owner_name"),
-            company: row.get("company"),
-            tier: row.get("tier"),
-            rate_limit_per_minute: row.get("rate_limit_per_minute"),
-            monthly_quota: row.get("monthly_quota"),
-            is_active: row.get("is_active"),
-            created_at: row.get("created_at"),
-            updated_at: row.get("updated_at"),
-            last_used_at: row.get("last_used_at"),
-            expires_at: row.get("expires_at"),
-        }).collect())
+        Ok(rows
+            .iter()
+            .map(|row| DbApiKey {
+                id: row.get("id"),
+                key_prefix: row.get("key_prefix"),
+                key_hash: row.get("key_hash"),
+                name: row.get("name"),
+                owner_email: row.get("owner_email"),
+                owner_name: row.get("owner_name"),
+                company: row.get("company"),
+                tier: row.get("tier"),
+                rate_limit_per_minute: row.get("rate_limit_per_minute"),
+                monthly_quota: row.get("monthly_quota"),
+                is_active: row.get("is_active"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
+                last_used_at: row.get("last_used_at"),
+                expires_at: row.get("expires_at"),
+            })
+            .collect())
     }
 
     /// Revoke (deactivate) an API key
     pub async fn revoke(&self, id: Uuid) -> Result<bool, DbError> {
         let client = self.pool.get().await?;
 
-        let result = client.execute(
-            "UPDATE api_keys SET is_active = false WHERE id = $1",
-            &[&id]
-        ).await?;
+        let result = client
+            .execute(
+                "UPDATE api_keys SET is_active = false WHERE id = $1",
+                &[&id],
+            )
+            .await?;
 
         if result > 0 {
             warn!(key_id = %id, "API key revoked");
@@ -354,10 +374,9 @@ impl ApiKeyRepository {
     pub async fn delete(&self, id: Uuid) -> Result<bool, DbError> {
         let client = self.pool.get().await?;
 
-        let result = client.execute(
-            "DELETE FROM api_keys WHERE id = $1",
-            &[&id]
-        ).await?;
+        let result = client
+            .execute("DELETE FROM api_keys WHERE id = $1", &[&id])
+            .await?;
 
         if result > 0 {
             warn!(key_id = %id, "API key deleted");

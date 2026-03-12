@@ -3,16 +3,17 @@
 //! Combines design images with t-shirt templates using displacement mapping
 //! and blend modes for photorealistic mockups.
 
-use std::sync::Arc;
-use image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
-use thiserror::Error;
-use tracing::{info, debug};
-use bytes::Bytes;
 use base64::Engine;
+use bytes::Bytes;
+use image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
+use std::sync::Arc;
+use thiserror::Error;
+use tracing::{debug, info};
 
-use crate::domain::PlacementSpec;
-use super::template::Template;
 use super::displacement::{apply_displacement, apply_opacity};
+use super::template::Template;
+use crate::config::service_user_agent;
+use crate::domain::PlacementSpec;
 
 /// Compositing errors
 #[derive(Debug, Error)]
@@ -52,7 +53,7 @@ impl Compositor {
     pub fn new() -> Self {
         let http_client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
-            .user_agent("TeeswimMockupService/0.1.0")
+            .user_agent(service_user_agent())
             .build()
             .expect("Failed to create HTTP client");
 
@@ -144,7 +145,10 @@ impl Compositor {
 
         // For now, return the bytes directly (Cloudinary upload can be added later)
         Ok(MockupResult {
-            url: format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&png_bytes)),
+            url: format!(
+                "data:image/png;base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(&png_bytes)
+            ),
             width,
             height,
             bytes: Bytes::from(png_bytes),
@@ -316,9 +320,9 @@ impl Compositor {
 
         // Thresholds for "white-ish" detection
         // Lower value = more aggressive removal (catches more off-white)
-        const WHITE_THRESHOLD: u8 = 245;  // Pure white detection
-        const LIGHT_THRESHOLD: u8 = 230;  // Light color detection
-        const EDGE_FEATHER: u8 = 25;      // Feather range for smooth edges
+        const WHITE_THRESHOLD: u8 = 245; // Pure white detection
+        const LIGHT_THRESHOLD: u8 = 230; // Light color detection
+        const EDGE_FEATHER: u8 = 25; // Feather range for smooth edges
 
         for y in 0..height {
             for x in 0..width {
@@ -341,11 +345,15 @@ impl Compositor {
                     output.put_pixel(x, y, Rgba([r, g, b, 0]));
                 } else if luminance >= LIGHT_THRESHOLD && variance <= 25 {
                     // Light gray/off-white - gradual transparency based on how white
-                    let alpha = ((255 - luminance) as f32 / (255 - LIGHT_THRESHOLD) as f32 * 255.0).min(255.0) as u8;
+                    let alpha = ((255 - luminance) as f32 / (255 - LIGHT_THRESHOLD) as f32 * 255.0)
+                        .min(255.0) as u8;
                     output.put_pixel(x, y, Rgba([r, g, b, alpha]));
                 } else if luminance >= LIGHT_THRESHOLD - EDGE_FEATHER && variance <= 35 {
                     // Edge feathering zone
-                    let alpha = ((LIGHT_THRESHOLD - luminance.saturating_sub(EDGE_FEATHER)) as f32 / EDGE_FEATHER as f32 * 255.0).min(255.0) as u8;
+                    let alpha = ((LIGHT_THRESHOLD - luminance.saturating_sub(EDGE_FEATHER)) as f32
+                        / EDGE_FEATHER as f32
+                        * 255.0)
+                        .min(255.0) as u8;
                     output.put_pixel(x, y, Rgba([r, g, b, alpha]));
                 } else {
                     // Keep pixel fully opaque

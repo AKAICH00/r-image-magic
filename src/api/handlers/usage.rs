@@ -2,13 +2,13 @@
 //!
 //! Endpoints for viewing API usage statistics, quotas, and billing info.
 
-use actix_web::{web, HttpRequest, HttpResponse, HttpMessage};
+use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::db::{UsageRepository, UsageStats, MonthlyUsageSummary, DbPool};
 use crate::api::middleware::ApiKeyAuth;
+use crate::db::{DbPool, MonthlyUsageSummary, UsageRepository, UsageStats};
 
 /// Usage stats response
 #[derive(Debug, Serialize)]
@@ -62,10 +62,7 @@ pub struct UsageHistoryResponse {
 
 /// Get current usage stats
 /// GET /api/v1/usage
-pub async fn get_usage_stats(
-    req: HttpRequest,
-    pool: web::Data<DbPool>,
-) -> HttpResponse {
+pub async fn get_usage_stats(req: HttpRequest, pool: web::Data<DbPool>) -> HttpResponse {
     let auth = match req.extensions().get::<ApiKeyAuth>().cloned() {
         Some(auth) => auth,
         None => {
@@ -140,7 +137,10 @@ pub async fn get_usage_history(
         Ok(history) => {
             let response = UsageHistoryResponse {
                 api_key_id: auth.key_id,
-                months: history.into_iter().map(MonthlyUsageResponse::from).collect(),
+                months: history
+                    .into_iter()
+                    .map(MonthlyUsageResponse::from)
+                    .collect(),
             };
 
             HttpResponse::Ok().json(response)
@@ -258,10 +258,7 @@ pub struct PricingInfo {
 
 /// Get billing summary for current month
 /// GET /api/v1/usage/billing
-pub async fn get_billing_summary(
-    req: HttpRequest,
-    pool: web::Data<DbPool>,
-) -> HttpResponse {
+pub async fn get_billing_summary(req: HttpRequest, pool: web::Data<DbPool>) -> HttpResponse {
     let auth = match req.extensions().get::<ApiKeyAuth>().cloned() {
         Some(auth) => auth,
         None => {

@@ -1,6 +1,6 @@
 //! Database connection pool management
 
-use deadpool_postgres::{Config, Pool, Runtime, ManagerConfig, RecyclingMethod};
+use deadpool_postgres::{Config, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use thiserror::Error;
 use tracing::info;
 
@@ -40,7 +40,8 @@ impl DbPool {
         let url = url::Url::parse(database_url)
             .map_err(|e| DbError::Config(format!("Invalid database URL: {}", e)))?;
 
-        let host = url.host_str()
+        let host = url
+            .host_str()
             .ok_or_else(|| DbError::Config("Missing host in DATABASE_URL".to_string()))?;
         let port = url.port().unwrap_or(5432);
         let user = url.username();
@@ -48,7 +49,8 @@ impl DbPool {
         let dbname = url.path().trim_start_matches('/');
 
         // Check if SSL is requested
-        let use_tls = url.query_pairs()
+        let use_tls = url
+            .query_pairs()
             .any(|(k, v)| k == "sslmode" && v != "disable");
 
         let mut cfg = Config::new();

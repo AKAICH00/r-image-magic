@@ -8,9 +8,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::domain::catalog::{
-    UnifiedProduct, UnifiedVariant, UnifiedPrintArea, MockupAsset
-};
+use crate::domain::catalog::{MockupAsset, UnifiedPrintArea, UnifiedProduct, UnifiedVariant};
 
 // ============================================================================
 // Error Types
@@ -128,9 +126,7 @@ impl ProviderCredentials {
 
     /// Check if any credentials are configured
     pub fn is_configured(&self) -> bool {
-        self.access_token.is_some()
-            || self.api_key.is_some()
-            || self.recipe_id.is_some()
+        self.access_token.is_some() || self.api_key.is_some() || self.recipe_id.is_some()
     }
 }
 
@@ -185,7 +181,11 @@ pub trait PodProvider: Send + Sync {
     /// # Arguments
     /// * `page` - Page number (1-indexed)
     /// * `per_page` - Number of items per page (max 100)
-    async fn get_products(&self, page: u32, per_page: u32) -> ProviderResult<CatalogPage<UnifiedProduct>>;
+    async fn get_products(
+        &self,
+        page: u32,
+        per_page: u32,
+    ) -> ProviderResult<CatalogPage<UnifiedProduct>>;
 
     /// Get product details by external ID
     ///
@@ -203,7 +203,10 @@ pub trait PodProvider: Send + Sync {
     ///
     /// # Arguments
     /// * `product_external_id` - Provider's product ID
-    async fn get_print_areas(&self, product_external_id: &str) -> ProviderResult<Vec<UnifiedPrintArea>>;
+    async fn get_print_areas(
+        &self,
+        product_external_id: &str,
+    ) -> ProviderResult<Vec<UnifiedPrintArea>>;
 
     /// Get mockup/printfile URLs for a product variant
     ///
@@ -238,7 +241,9 @@ impl ProviderFactory {
     /// A boxed provider instance, or None if the provider code is unknown
     pub fn create(code: &str, credentials: ProviderCredentials) -> Option<Box<dyn PodProvider>> {
         match code {
-            "printful" => Some(Box::new(crate::providers::printful::PrintfulProvider::new(credentials))),
+            "printful" => Some(Box::new(crate::providers::printful::PrintfulProvider::new(
+                credentials,
+            ))),
             // "printify" => Some(Box::new(crate::providers::printify::PrintifyProvider::new(credentials))),
             // "gelato" => Some(Box::new(crate::providers::gelato::GelatoProvider::new(credentials))),
             // "spod" => Some(Box::new(crate::providers::spod::SpodProvider::new(credentials))),

@@ -6,7 +6,7 @@
 //! API Documentation: https://developers.printful.com/docs/
 
 mod client;
-mod models;
 mod mapper;
+mod models;
 
 pub use client::PrintfulProvider;

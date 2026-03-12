@@ -5,12 +5,12 @@
 
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{debug, info, warn, error, instrument};
 use tokio::sync::Semaphore;
+use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
 use crate::domain::catalog::{AssetType, MockupAsset, PrintPlacement};
-use crate::storage::{R2Client, R2Error, AssetPath, UploadResult};
+use crate::storage::{AssetPath, R2Client, R2Error, UploadResult};
 
 /// Errors that can occur during asset synchronization
 #[derive(Error, Debug)]
@@ -148,10 +148,7 @@ impl AssetSyncer {
 
         // Download from source
         debug!("Downloading asset from: {}", asset.source_url);
-        let response = self.http_client
-            .get(&asset.source_url)
-            .send()
-            .await?;
+        let response = self.http_client.get(&asset.source_url).send().await?;
 
         if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
             let retry_after = response
@@ -160,7 +157,9 @@ impl AssetSyncer {
                 .and_then(|v| v.to_str().ok())
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(60);
-            return Err(AssetSyncError::RateLimited { retry_after_secs: retry_after });
+            return Err(AssetSyncError::RateLimited {
+                retry_after_secs: retry_after,
+            });
         }
 
         if response.status() == reqwest::StatusCode::NOT_FOUND {
@@ -187,9 +186,7 @@ impl AssetSyncer {
 
         // Upload to R2
         debug!("Uploading {} bytes to R2: {}", size_bytes, r2_key);
-        let upload_result = self.r2_client
-            .upload(&path, data, &content_type)
-            .await?;
+        let upload_result = self.r2_client.upload(&path, data, &content_type).await?;
 
         let sync_time_ms = start.elapsed().as_millis() as u64;
         info!(
@@ -261,9 +258,12 @@ impl AssetSyncer {
                 }
                 Err(e) => {
                     batch_result.failed_count += 1;
-                    batch_result.results.push(Err(AssetSyncError::HttpError(
-                        format!("Task panicked: {}", e),
-                    )));
+                    batch_result
+                        .results
+                        .push(Err(AssetSyncError::HttpError(format!(
+                            "Task panicked: {}",
+                            e
+                        ))));
                 }
             }
         }
@@ -289,7 +289,8 @@ impl AssetSyncer {
         product_id: &str,
         mockup_urls: Vec<MockupAsset>,
     ) -> BatchSyncResult {
-        self.sync_batch(provider_code, product_id, &mockup_urls).await
+        self.sync_batch(provider_code, product_id, &mockup_urls)
+            .await
     }
 
     /// Build an AssetPath from a MockupAsset
@@ -303,23 +304,13 @@ impl AssetSyncer {
         let filename = self.extract_filename(&asset.source_url);
 
         match asset.asset_type {
-            AssetType::BaseImage => {
-                AssetPath::base_image(provider_code, product_id, &filename)
-            }
-            AssetType::Thumbnail => {
-                AssetPath::thumbnail(provider_code, product_id, &filename)
-            }
+            AssetType::BaseImage => AssetPath::base_image(provider_code, product_id, &filename),
+            AssetType::Thumbnail => AssetPath::thumbnail(provider_code, product_id, &filename),
             AssetType::MockupTemplate | AssetType::PrintfilePreview => {
-                let placement = asset.placement.clone()
-                    .unwrap_or(PrintPlacement::Front);
+                let placement = asset.placement.clone().unwrap_or(PrintPlacement::Front);
 
                 if let Some(ref variant_id) = asset.variant_external_id {
-                    AssetPath::variant_asset(
-                        provider_code,
-                        product_id,
-                        variant_id,
-                        placement,
-                    )
+                    AssetPath::variant_asset(provider_code, product_id, variant_id, placement)
                 } else {
                     AssetPath::mockup_template(
                         provider_code,

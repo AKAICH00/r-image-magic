@@ -27,8 +27,12 @@ pub struct ProductsQuery {
     pub per_page: u32,
 }
 
-fn default_page() -> u32 { 1 }
-fn default_per_page() -> u32 { 50 }
+fn default_page() -> u32 {
+    1
+}
+fn default_per_page() -> u32 {
+    50
+}
 
 /// Provider response
 #[derive(Debug, Serialize)]
@@ -132,9 +136,7 @@ macro_rules! get_client {
 }
 
 /// List all POD providers
-pub async fn list_providers(
-    pool: web::Data<DbPool>,
-) -> HttpResponse {
+pub async fn list_providers(pool: web::Data<DbPool>) -> HttpResponse {
     let client = get_client!(pool);
 
     let query = r#"
@@ -147,18 +149,20 @@ pub async fn list_providers(
 
     match client.query(query, &[]).await {
         Ok(rows) => {
-            let providers: Vec<ProviderResponse> = rows.iter().map(|row| {
-                ProviderResponse {
+            let providers: Vec<ProviderResponse> = rows
+                .iter()
+                .map(|row| ProviderResponse {
                     id: row.get("id"),
                     code: row.get("code"),
                     name: row.get("name"),
                     is_active: row.get("is_active"),
                     sync_enabled: row.get("sync_enabled"),
-                    last_sync_at: row.get::<_, Option<chrono::DateTime<chrono::Utc>>>("last_sync_at")
+                    last_sync_at: row
+                        .get::<_, Option<chrono::DateTime<chrono::Utc>>>("last_sync_at")
                         .map(|dt| dt.to_rfc3339()),
                     rate_limit_per_minute: row.get("rate_limit_per_minute"),
-                }
-            }).collect();
+                })
+                .collect();
 
             HttpResponse::Ok().json(providers)
         }
@@ -172,9 +176,7 @@ pub async fn list_providers(
 }
 
 /// List all product categories with counts
-pub async fn list_categories(
-    pool: web::Data<DbPool>,
-) -> HttpResponse {
+pub async fn list_categories(pool: web::Data<DbPool>) -> HttpResponse {
     let client = get_client!(pool);
 
     let query = r#"
@@ -189,14 +191,15 @@ pub async fn list_categories(
 
     match client.query(query, &[]).await {
         Ok(rows) => {
-            let categories: Vec<CategoryResponse> = rows.iter().map(|row| {
-                CategoryResponse {
+            let categories: Vec<CategoryResponse> = rows
+                .iter()
+                .map(|row| CategoryResponse {
                     id: row.get("id"),
                     slug: row.get("slug"),
                     name: row.get("name"),
                     product_count: row.get("product_count"),
-                }
-            }).collect();
+                })
+                .collect();
 
             HttpResponse::Ok().json(categories)
         }
@@ -231,7 +234,10 @@ pub async fn list_products(
         conditions.push(format!("p.product_type = '{}'", t.replace('\'', "''")));
     }
     if let Some(ref s) = query_params.search {
-        conditions.push(format!("p.name ILIKE '%{}%'", s.replace('\'', "''").replace('%', "\\%")));
+        conditions.push(format!(
+            "p.name ILIKE '%{}%'",
+            s.replace('\'', "''").replace('%', "\\%")
+        ));
     }
 
     let where_clause = if conditions.is_empty() {
@@ -241,13 +247,16 @@ pub async fn list_products(
     };
 
     // Count query
-    let count_sql = format!(r#"
+    let count_sql = format!(
+        r#"
         SELECT COUNT(*) as total
         FROM pod_products p
         JOIN pod_providers pr ON p.provider_id = pr.id
         LEFT JOIN product_categories c ON p.category_id = c.id
         {}
-    "#, where_clause);
+    "#,
+        where_clause
+    );
 
     let total: i64 = match client.query_one(&count_sql, &[]).await {
         Ok(row) => row.get("total"),
@@ -260,7 +269,8 @@ pub async fn list_products(
     };
 
     // Data query
-    let data_sql = format!(r#"
+    let data_sql = format!(
+        r#"
         SELECT
             p.id, pr.code as provider_code, p.external_product_id,
             p.name, p.product_type, c.slug as category_slug,
@@ -272,12 +282,15 @@ pub async fn list_products(
         {}
         ORDER BY p.name
         LIMIT {} OFFSET {}
-    "#, where_clause, limit, offset);
+    "#,
+        where_clause, limit, offset
+    );
 
     match client.query(&data_sql, &[]).await {
         Ok(rows) => {
-            let products: Vec<ProductSummaryResponse> = rows.iter().map(|row| {
-                ProductSummaryResponse {
+            let products: Vec<ProductSummaryResponse> = rows
+                .iter()
+                .map(|row| ProductSummaryResponse {
                     id: row.get("id"),
                     provider_code: row.get("provider_code"),
                     external_product_id: row.get("external_product_id"),
@@ -286,8 +299,8 @@ pub async fn list_products(
                     category_slug: row.get("category_slug"),
                     is_available: row.get("is_available"),
                     variant_count: row.get("variant_count"),
-                }
-            }).collect();
+                })
+                .collect();
 
             let total_pages = ((total as f64) / (query_params.per_page as f64)).ceil() as u32;
 
@@ -309,10 +322,7 @@ pub async fn list_products(
 }
 
 /// Get product details by ID
-pub async fn get_product(
-    pool: web::Data<DbPool>,
-    path: web::Path<Uuid>,
-) -> HttpResponse {
+pub async fn get_product(pool: web::Data<DbPool>, path: web::Path<Uuid>) -> HttpResponse {
     let client = get_client!(pool);
     let product_id = path.into_inner();
 
@@ -352,8 +362,9 @@ pub async fn get_product(
     "#;
 
     let variants: Vec<VariantResponse> = match client.query(variants_sql, &[&product_id]).await {
-        Ok(rows) => rows.iter().map(|row| {
-            VariantResponse {
+        Ok(rows) => rows
+            .iter()
+            .map(|row| VariantResponse {
                 id: row.get("id"),
                 external_variant_id: row.get("external_variant_id"),
                 sku: row.get("sku"),
@@ -362,8 +373,8 @@ pub async fn get_product(
                 color_hex: row.get("color_hex"),
                 is_available: row.get("is_available"),
                 price_cents: row.get("price_cents"),
-            }
-        }).collect(),
+            })
+            .collect(),
         Err(_) => Vec::new(),
     };
 
@@ -376,8 +387,9 @@ pub async fn get_product(
     "#;
 
     let print_areas: Vec<PrintAreaResponse> = match client.query(areas_sql, &[&product_id]).await {
-        Ok(rows) => rows.iter().map(|row| {
-            PrintAreaResponse {
+        Ok(rows) => rows
+            .iter()
+            .map(|row| PrintAreaResponse {
                 id: row.get("id"),
                 placement: row.get("placement"),
                 name: row.get("name"),
@@ -386,8 +398,8 @@ pub async fn get_product(
                 offset_x_px: row.get("offset_x_px"),
                 offset_y_px: row.get("offset_y_px"),
                 print_dpi: row.get("print_dpi"),
-            }
-        }).collect(),
+            })
+            .collect(),
         Err(_) => Vec::new(),
     };
 
@@ -407,10 +419,7 @@ pub async fn get_product(
 }
 
 /// Get print areas for a product
-pub async fn get_print_areas(
-    pool: web::Data<DbPool>,
-    path: web::Path<Uuid>,
-) -> HttpResponse {
+pub async fn get_print_areas(pool: web::Data<DbPool>, path: web::Path<Uuid>) -> HttpResponse {
     let client = get_client!(pool);
     let product_id = path.into_inner();
 
@@ -423,8 +432,9 @@ pub async fn get_print_areas(
 
     match client.query(sql, &[&product_id]).await {
         Ok(rows) => {
-            let areas: Vec<PrintAreaResponse> = rows.iter().map(|row| {
-                PrintAreaResponse {
+            let areas: Vec<PrintAreaResponse> = rows
+                .iter()
+                .map(|row| PrintAreaResponse {
                     id: row.get("id"),
                     placement: row.get("placement"),
                     name: row.get("name"),
@@ -433,8 +443,8 @@ pub async fn get_print_areas(
                     offset_x_px: row.get("offset_x_px"),
                     offset_y_px: row.get("offset_y_px"),
                     print_dpi: row.get("print_dpi"),
-                }
-            }).collect();
+                })
+                .collect();
 
             HttpResponse::Ok().json(areas)
         }

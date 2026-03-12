@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::db::DbPool;
-use crate::storage::{R2Client, AssetPath};
+use crate::storage::{AssetPath, R2Client};
 
 /// Helper macro to get database client
 macro_rules! get_client {
@@ -47,9 +47,7 @@ pub struct R2StatusResponse {
 }
 
 /// List all sync jobs
-pub async fn list_jobs(
-    pool: web::Data<DbPool>,
-) -> HttpResponse {
+pub async fn list_jobs(pool: web::Data<DbPool>) -> HttpResponse {
     let client = get_client!(pool);
 
     let sql = r#"
@@ -65,34 +63,42 @@ pub async fn list_jobs(
 
     match client.query(sql, &[]).await {
         Ok(rows) => {
-            let jobs: Vec<serde_json::Value> = rows.iter().map(|row| {
-                let started_at: Option<chrono::DateTime<chrono::Utc>> = row.get("started_at");
-                let completed_at: Option<chrono::DateTime<chrono::Utc>> = row.get("completed_at");
-                let total: i32 = row.get("total_items");
-                let processed: i32 = row.get("processed_items");
-                let progress = if total > 0 { (processed as f32 / total as f32) * 100.0 } else { 0.0 };
+            let jobs: Vec<serde_json::Value> = rows
+                .iter()
+                .map(|row| {
+                    let started_at: Option<chrono::DateTime<chrono::Utc>> = row.get("started_at");
+                    let completed_at: Option<chrono::DateTime<chrono::Utc>> =
+                        row.get("completed_at");
+                    let total: i32 = row.get("total_items");
+                    let processed: i32 = row.get("processed_items");
+                    let progress = if total > 0 {
+                        (processed as f32 / total as f32) * 100.0
+                    } else {
+                        0.0
+                    };
 
-                let duration = match (started_at, completed_at) {
-                    (Some(start), Some(end)) => Some((end - start).num_seconds()),
-                    (Some(start), None) => Some((chrono::Utc::now() - start).num_seconds()),
-                    _ => None,
-                };
+                    let duration = match (started_at, completed_at) {
+                        (Some(start), Some(end)) => Some((end - start).num_seconds()),
+                        (Some(start), None) => Some((chrono::Utc::now() - start).num_seconds()),
+                        _ => None,
+                    };
 
-                serde_json::json!({
-                    "id": row.get::<_, Uuid>("id"),
-                    "provider_code": row.get::<_, String>("provider_code"),
-                    "job_type": row.get::<_, String>("job_type"),
-                    "status": row.get::<_, String>("status"),
-                    "total_items": total,
-                    "processed_items": processed,
-                    "failed_items": row.get::<_, i32>("failed_items"),
-                    "progress_percent": progress,
-                    "started_at": started_at.map(|dt| dt.to_rfc3339()),
-                    "completed_at": completed_at.map(|dt| dt.to_rfc3339()),
-                    "duration_secs": duration,
-                    "error_message": row.get::<_, Option<String>>("error_message"),
+                    serde_json::json!({
+                        "id": row.get::<_, Uuid>("id"),
+                        "provider_code": row.get::<_, String>("provider_code"),
+                        "job_type": row.get::<_, String>("job_type"),
+                        "status": row.get::<_, String>("status"),
+                        "total_items": total,
+                        "processed_items": processed,
+                        "failed_items": row.get::<_, i32>("failed_items"),
+                        "progress_percent": progress,
+                        "started_at": started_at.map(|dt| dt.to_rfc3339()),
+                        "completed_at": completed_at.map(|dt| dt.to_rfc3339()),
+                        "duration_secs": duration,
+                        "error_message": row.get::<_, Option<String>>("error_message"),
+                    })
                 })
-            }).collect();
+                .collect();
 
             HttpResponse::Ok().json(jobs)
         }
@@ -106,10 +112,7 @@ pub async fn list_jobs(
 }
 
 /// Get sync job by ID
-pub async fn get_job(
-    pool: web::Data<DbPool>,
-    path: web::Path<Uuid>,
-) -> HttpResponse {
+pub async fn get_job(pool: web::Data<DbPool>, path: web::Path<Uuid>) -> HttpResponse {
     let client = get_client!(pool);
     let job_id = path.into_inner();
 
@@ -129,7 +132,11 @@ pub async fn get_job(
             let completed_at: Option<chrono::DateTime<chrono::Utc>> = row.get("completed_at");
             let total: i32 = row.get("total_items");
             let processed: i32 = row.get("processed_items");
-            let progress = if total > 0 { (processed as f32 / total as f32) * 100.0 } else { 0.0 };
+            let progress = if total > 0 {
+                (processed as f32 / total as f32) * 100.0
+            } else {
+                0.0
+            };
 
             let duration = match (started_at, completed_at) {
                 (Some(start), Some(end)) => Some((end - start).num_seconds()),
@@ -152,11 +159,9 @@ pub async fn get_job(
                 "error_message": row.get::<_, Option<String>>("error_message"),
             }))
         }
-        Ok(None) => {
-            HttpResponse::NotFound().json(serde_json::json!({
-                "error": "Sync job not found"
-            }))
-        }
+        Ok(None) => HttpResponse::NotFound().json(serde_json::json!({
+            "error": "Sync job not found"
+        })),
         Err(e) => {
             tracing::error!("Failed to get sync job: {}", e);
             HttpResponse::InternalServerError().json(serde_json::json!({
@@ -217,7 +222,10 @@ pub async fn start_sync(
         RETURNING id
     "#;
 
-    match client.query_one(insert_sql, &[&job_id, &provider_id, job_type]).await {
+    match client
+        .query_one(insert_sql, &[&job_id, &provider_id, job_type])
+        .await
+    {
         Ok(_) => {
             tracing::info!("Started sync job {} for provider {}", job_id, provider_code);
 
@@ -240,9 +248,15 @@ pub async fn start_sync(
 
 /// Get R2 storage status
 pub async fn get_r2_status() -> HttpResponse {
-    let account_id = std::env::var("R2_ACCOUNT_ID").ok();
-    let access_key = std::env::var("R2_ACCESS_KEY_ID").ok();
-    let bucket_name = std::env::var("R2_BUCKET_NAME").ok();
+    let account_id = std::env::var("R2_ACCOUNT_ID")
+        .or_else(|_| std::env::var("MOCKUP_R2__ACCOUNT_ID"))
+        .ok();
+    let access_key = std::env::var("R2_ACCESS_KEY_ID")
+        .or_else(|_| std::env::var("MOCKUP_R2__ACCESS_KEY_ID"))
+        .ok();
+    let bucket_name = std::env::var("R2_BUCKET_NAME")
+        .or_else(|_| std::env::var("MOCKUP_R2__BUCKET_NAME"))
+        .ok();
 
     let configured = account_id.is_some() && access_key.is_some();
 
@@ -265,29 +279,23 @@ pub async fn test_r2() -> HttpResponse {
         Ok(client) => {
             // Try to list objects (empty prefix = list root)
             match client.list("", Some(1)).await {
-                Ok(keys) => {
-                    HttpResponse::Ok().json(serde_json::json!({
-                        "status": "ok",
-                        "message": "R2 connection successful",
-                        "bucket": client.bucket(),
-                        "sample_keys": keys
-                    }))
-                }
-                Err(e) => {
-                    HttpResponse::ServiceUnavailable().json(serde_json::json!({
-                        "status": "error",
-                        "message": format!("R2 connection failed: {}", e),
-                        "bucket": client.bucket()
-                    }))
-                }
+                Ok(keys) => HttpResponse::Ok().json(serde_json::json!({
+                    "status": "ok",
+                    "message": "R2 connection successful",
+                    "bucket": client.bucket(),
+                    "sample_keys": keys
+                })),
+                Err(e) => HttpResponse::ServiceUnavailable().json(serde_json::json!({
+                    "status": "error",
+                    "message": format!("R2 connection failed: {}", e),
+                    "bucket": client.bucket()
+                })),
             }
         }
-        Err(e) => {
-            HttpResponse::ServiceUnavailable().json(serde_json::json!({
-                "status": "not_configured",
-                "message": format!("R2 not configured: {}", e)
-            }))
-        }
+        Err(e) => HttpResponse::ServiceUnavailable().json(serde_json::json!({
+            "status": "not_configured",
+            "message": format!("R2 not configured: {}", e)
+        })),
     }
 }
 
@@ -303,29 +311,30 @@ pub async fn test_r2_upload() -> HttpResponse {
 
             let path = AssetPath::base_image("test", "connectivity", "test.json");
 
-            match client.upload(&path, serde_json::to_vec(&test_data).unwrap(), "application/json").await {
-                Ok(result) => {
-                    HttpResponse::Ok().json(serde_json::json!({
-                        "status": "ok",
-                        "message": "R2 upload successful",
-                        "key": result.key,
-                        "size": result.size,
-                        "public_url": result.public_url
-                    }))
-                }
-                Err(e) => {
-                    HttpResponse::ServiceUnavailable().json(serde_json::json!({
-                        "status": "error",
-                        "message": format!("R2 upload failed: {}", e)
-                    }))
-                }
+            match client
+                .upload(
+                    &path,
+                    serde_json::to_vec(&test_data).unwrap(),
+                    "application/json",
+                )
+                .await
+            {
+                Ok(result) => HttpResponse::Ok().json(serde_json::json!({
+                    "status": "ok",
+                    "message": "R2 upload successful",
+                    "key": result.key,
+                    "size": result.size,
+                    "public_url": result.public_url
+                })),
+                Err(e) => HttpResponse::ServiceUnavailable().json(serde_json::json!({
+                    "status": "error",
+                    "message": format!("R2 upload failed: {}", e)
+                })),
             }
         }
-        Err(e) => {
-            HttpResponse::ServiceUnavailable().json(serde_json::json!({
-                "status": "not_configured",
-                "message": format!("R2 not configured: {}", e)
-            }))
-        }
+        Err(e) => HttpResponse::ServiceUnavailable().json(serde_json::json!({
+            "status": "not_configured",
+            "message": format!("R2 not configured: {}", e)
+        })),
     }
 }

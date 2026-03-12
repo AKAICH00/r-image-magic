@@ -5,4 +5,4 @@
 
 mod r2;
 
-pub use r2::{R2Client, R2Error, AssetPath, UploadResult};
+pub use r2::{AssetPath, R2Client, R2Error, UploadResult};

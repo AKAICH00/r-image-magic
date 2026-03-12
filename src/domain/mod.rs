@@ -1,11 +1,11 @@
 //! Domain types and models
 
-mod placement;
 pub mod catalog;
+mod placement;
 
-pub use placement::{PlacementSpec, PlacementType, CoordinateSpace};
 pub use catalog::{
-    ProductType, PrintPlacement, AssetType,
-    UnifiedProduct, UnifiedVariant, UnifiedPrintArea, MockupAsset, PrintConstraints,
-    DbPodProvider, DbPodProduct, DbPodProductVariant, DbPodPrintArea, DbPodMockupAsset, DbPodSyncJob,
+    AssetType, DbPodMockupAsset, DbPodPrintArea, DbPodProduct, DbPodProductVariant, DbPodProvider,
+    DbPodSyncJob, MockupAsset, PrintConstraints, PrintPlacement, ProductType, UnifiedPrintArea,
+    UnifiedProduct, UnifiedVariant,
 };
+pub use placement::{CoordinateSpace, PlacementSpec, PlacementType};

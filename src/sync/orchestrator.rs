@@ -3,19 +3,19 @@
 //! Manages sync jobs, tracks progress, and coordinates between providers,
 //! database, and R2 storage.
 
-use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use thiserror::Error;
-use tracing::{debug, info, warn, error, instrument};
+use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
 use crate::db::DbPool;
 use crate::domain::catalog::{MockupAsset, UnifiedProduct};
-use crate::providers::{PodProvider, ProviderFactory, ProviderCredentials, ProviderError};
+use crate::providers::{PodProvider, ProviderCredentials, ProviderError, ProviderFactory};
 use crate::storage::R2Client;
 
-use super::asset_sync::{AssetSyncer, AssetSyncError, BatchSyncResult};
+use super::asset_sync::{AssetSyncError, AssetSyncer, BatchSyncResult};
 
 /// Errors that can occur during sync orchestration
 #[derive(Error, Debug)]
@@ -342,7 +342,10 @@ impl SyncOrchestrator {
         product: &UnifiedProduct,
         provider: &dyn PodProvider,
     ) -> Result<(), SyncOrchestratorError> {
-        debug!("Syncing product: {} - {}", product.external_id, product.name);
+        debug!(
+            "Syncing product: {} - {}",
+            product.external_id, product.name
+        );
 
         // Get mockup URLs for the product
         let mockup_assets = provider

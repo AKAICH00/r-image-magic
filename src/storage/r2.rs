@@ -23,21 +23,21 @@
 //! ```
 
 use aws_sdk_s3::{
-    Client as S3Client,
     config::{Builder, Credentials, Region},
-    primitives::ByteStream,
     error::SdkError,
-    operation::put_object::PutObjectError,
+    operation::delete_object::DeleteObjectError,
     operation::get_object::GetObjectError,
     operation::head_object::HeadObjectError,
-    operation::delete_object::DeleteObjectError,
     operation::list_objects_v2::ListObjectsV2Error,
+    operation::put_object::PutObjectError,
+    primitives::ByteStream,
+    Client as S3Client,
 };
 use std::fmt;
 use thiserror::Error;
-use tracing::{debug, info, warn, instrument};
+use tracing::{debug, info, instrument, warn};
 
-use crate::config::R2Settings;
+use crate::config::{default_r2_bucket_name, R2Settings};
 use crate::domain::catalog::{AssetType, PrintPlacement};
 
 /// Errors that can occur during R2 operations
@@ -165,18 +165,13 @@ impl AssetPath {
             // Variant-specific path: {provider}/variants/{variant_id}/{filename}
             format!(
                 "{}/variants/{}/{}",
-                self.provider,
-                variant_id,
-                self.filename
+                self.provider, variant_id, self.filename
             )
         } else {
             // Product-level path: {provider}/products/{product_id}/{asset_folder}/{filename}
             format!(
                 "{}/products/{}/{}/{}",
-                self.provider,
-                self.product_id,
-                asset_folder,
-                self.filename
+                self.provider, self.product_id, asset_folder, self.filename
             )
         }
     }
@@ -227,7 +222,10 @@ impl AssetPath {
                 filename,
             })
         } else {
-            Err(R2Error::InvalidPath(format!("Unrecognized path structure: {}", key)))
+            Err(R2Error::InvalidPath(format!(
+                "Unrecognized path structure: {}",
+                key
+            )))
         }
     }
 }
@@ -259,10 +257,7 @@ impl R2Client {
     /// Create a new R2 client from settings
     pub async fn new(settings: &R2Settings) -> Result<Self, R2Error> {
         // R2 endpoint format: https://{account_id}.r2.cloudflarestorage.com
-        let endpoint = format!(
-            "https://{}.r2.cloudflarestorage.com",
-            settings.account_id
-        );
+        let endpoint = format!("https://{}.r2.cloudflarestorage.com", settings.account_id);
 
         debug!("Creating R2 client with endpoint: {}", endpoint);
 
@@ -293,14 +288,20 @@ impl R2Client {
     /// Create from environment variables
     pub async fn from_env() -> Result<Self, R2Error> {
         let account_id = std::env::var("R2_ACCOUNT_ID")
+            .or_else(|_| std::env::var("MOCKUP_R2__ACCOUNT_ID"))
             .map_err(|_| R2Error::NotConfigured)?;
         let access_key_id = std::env::var("R2_ACCESS_KEY_ID")
+            .or_else(|_| std::env::var("MOCKUP_R2__ACCESS_KEY_ID"))
             .map_err(|_| R2Error::NotConfigured)?;
         let secret_access_key = std::env::var("R2_SECRET_ACCESS_KEY")
+            .or_else(|_| std::env::var("MOCKUP_R2__SECRET_ACCESS_KEY"))
             .map_err(|_| R2Error::NotConfigured)?;
         let bucket_name = std::env::var("R2_BUCKET_NAME")
-            .unwrap_or_else(|_| "r-image-magic-pod-assets".to_string());
-        let public_url_prefix = std::env::var("R2_PUBLIC_URL_PREFIX").ok();
+            .or_else(|_| std::env::var("MOCKUP_R2__BUCKET_NAME"))
+            .unwrap_or_else(|_| default_r2_bucket_name());
+        let public_url_prefix = std::env::var("R2_PUBLIC_URL_PREFIX")
+            .or_else(|_| std::env::var("MOCKUP_R2__PUBLIC_URL_PREFIX"))
+            .ok();
 
         let settings = R2Settings {
             account_id,
@@ -331,7 +332,8 @@ impl R2Client {
 
         debug!("Uploading {} bytes to R2: {}", size, key);
 
-        let result = self.client
+        let result = self
+            .client
             .put_object()
             .bucket(&self.bucket)
             .key(&key)
@@ -343,9 +345,10 @@ impl R2Client {
 
         let etag = result.e_tag().map(String::from);
 
-        let public_url = self.public_url_prefix.as_ref().map(|prefix| {
-            format!("{}/{}", prefix.trim_end_matches('/'), key)
-        });
+        let public_url = self
+            .public_url_prefix
+            .as_ref()
+            .map(|prefix| format!("{}/{}", prefix.trim_end_matches('/'), key));
 
         info!("Uploaded to R2: {} ({} bytes)", key, size);
 
@@ -375,7 +378,8 @@ impl R2Client {
     pub async fn download(&self, key: &str) -> Result<Vec<u8>, R2Error> {
         debug!("Downloading from R2: {}", key);
 
-        let result = self.client
+        let result = self
+            .client
             .get_object()
             .bucket(&self.bucket)
             .key(key)
@@ -389,7 +393,8 @@ impl R2Client {
                 }
             })?;
 
-        let data = result.body
+        let data = result
+            .body
             .collect()
             .await
             .map_err(|e| R2Error::DownloadFailed(format!("Failed to read body: {:?}", e)))?
@@ -404,7 +409,8 @@ impl R2Client {
     /// Check if an object exists in R2
     #[instrument(skip(self))]
     pub async fn exists(&self, key: &str) -> Result<bool, R2Error> {
-        match self.client
+        match self
+            .client
             .head_object()
             .bucket(&self.bucket)
             .key(key)
@@ -444,7 +450,8 @@ impl R2Client {
         let max = max_keys.unwrap_or(1000);
 
         loop {
-            let mut request = self.client
+            let mut request = self
+                .client
                 .list_objects_v2()
                 .bucket(&self.bucket)
                 .prefix(prefix)
@@ -504,9 +511,9 @@ impl R2Client {
 
     /// Get the public URL for an asset
     pub fn public_url(&self, key: &str) -> Option<String> {
-        self.public_url_prefix.as_ref().map(|prefix| {
-            format!("{}/{}", prefix.trim_end_matches('/'), key)
-        })
+        self.public_url_prefix
+            .as_ref()
+            .map(|prefix| format!("{}/{}", prefix.trim_end_matches('/'), key))
     }
 
     /// Download an asset from a URL and upload to R2
@@ -575,7 +582,10 @@ mod tests {
         assert_eq!(path.to_key(), "printful/variants/var-001/mockup.png");
 
         let path = AssetPath::thumbnail("printify", "67890", "preview.png");
-        assert_eq!(path.to_key(), "printify/products/67890/thumbnails/thumb_preview.png");
+        assert_eq!(
+            path.to_key(),
+            "printify/products/67890/thumbnails/thumb_preview.png"
+        );
     }
 
     #[test]

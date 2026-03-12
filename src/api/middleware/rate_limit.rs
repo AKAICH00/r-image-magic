@@ -12,8 +12,8 @@ use actix_web::{
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use crate::db::{UsageRepository, RateLimitStatus};
 use super::auth::ApiKeyAuth;
+use crate::db::{RateLimitStatus, UsageRepository};
 
 /// Rate limit headers
 pub const RATE_LIMIT_LIMIT: &str = "X-RateLimit-Limit";
@@ -52,10 +52,7 @@ pub async fn check_rate_limit(
 }
 
 /// Add rate limit headers to response
-pub fn add_rate_limit_headers(
-    response: &mut HttpResponse,
-    status: &RateLimitStatus,
-) {
+pub fn add_rate_limit_headers(response: &mut HttpResponse, status: &RateLimitStatus) {
     let headers = response.headers_mut();
 
     // X-RateLimit-Limit: Maximum requests per minute

@@ -2,11 +2,11 @@
 //!
 //! Maps Printful API responses to our unified catalog models.
 
-use crate::domain::catalog::{
-    UnifiedProduct, UnifiedVariant, UnifiedPrintArea, MockupAsset,
-    ProductType, PrintPlacement, AssetType, PrintConstraints,
-};
 use super::models::*;
+use crate::domain::catalog::{
+    AssetType, MockupAsset, PrintConstraints, PrintPlacement, ProductType, UnifiedPrintArea,
+    UnifiedProduct, UnifiedVariant,
+};
 
 /// Mapper for Printful API responses
 pub struct PrintfulMapper;
@@ -16,7 +16,10 @@ impl PrintfulMapper {
     pub fn map_product(product: PrintfulProduct) -> UnifiedProduct {
         let product_type = ProductType::from_str(&product.type_name);
         let category_slug = product_type.category_slug().to_string();
-        let currency = product.currency.clone().unwrap_or_else(|| "USD".to_string());
+        let currency = product
+            .currency
+            .clone()
+            .unwrap_or_else(|| "USD".to_string());
         let is_available = product.is_available();
         let metadata = serde_json::to_value(&product).unwrap_or_default();
 
@@ -31,9 +34,9 @@ impl PrintfulMapper {
             category_slug,
             is_available,
             regions: vec!["US".to_string(), "EU".to_string()], // Printful ships globally
-            base_price_cents: None, // Set from variants
+            base_price_cents: None,                            // Set from variants
             currency,
-            variants: Vec::new(), // Populated separately
+            variants: Vec::new(),    // Populated separately
             print_areas: Vec::new(), // Populated separately
             provider_metadata: metadata,
         }
@@ -44,10 +47,7 @@ impl PrintfulMapper {
         let mut product = Self::map_product(detail.product);
 
         // Map variants
-        product.variants = detail.variants
-            .into_iter()
-            .map(Self::map_variant)
-            .collect();
+        product.variants = detail.variants.into_iter().map(Self::map_variant).collect();
 
         // Set base price from first variant
         if let Some(first_variant) = product.variants.first() {
@@ -164,11 +164,14 @@ impl PrintfulMapper {
             .unwrap_or_else(|| vec!["front".to_string()]);
 
         // Map each printfile with its placement
-        response.printfiles
+        response
+            .printfiles
             .into_iter()
             .enumerate()
             .map(|(i, pf)| {
-                let placement_name = placements.get(i).cloned()
+                let placement_name = placements
+                    .get(i)
+                    .cloned()
                     .unwrap_or_else(|| "front".to_string());
                 Self::map_print_area(pf, &placement_name)
             })

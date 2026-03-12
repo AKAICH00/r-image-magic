@@ -2,13 +2,13 @@
 
 use actix_web::{web, HttpResponse};
 use serde::{Deserialize, Serialize};
-use tracing::{info, error};
 use std::time::Instant;
+use tracing::{error, info};
 use utoipa::ToSchema;
 
-use crate::AppState;
 use crate::domain::PlacementSpec;
 use crate::engine::MockupRequest;
+use crate::AppState;
 
 /// Request body for mockup generation
 #[derive(Debug, Deserialize, ToSchema)]
@@ -32,7 +32,9 @@ pub struct GenerateOptions {
     pub displacement_strength: f64,
 }
 
-fn default_displacement() -> f64 { 10.0 }
+fn default_displacement() -> f64 {
+    10.0
+}
 
 /// Response for successful mockup generation
 #[derive(Serialize, ToSchema)]

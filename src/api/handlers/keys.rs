@@ -3,16 +3,14 @@
 //! Endpoints for creating, listing, and managing API keys.
 //! Admin endpoints require admin authentication.
 
-use actix_web::{web, HttpRequest, HttpResponse, HttpMessage};
+use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::db::{
-    ApiKeyRepository, CreateApiKeyRequest, ApiKeyTier, DbPool,
-};
 use crate::api::middleware::ApiKeyAuth;
+use crate::db::{ApiKeyRepository, ApiKeyTier, CreateApiKeyRequest, DbPool};
 
 /// Request to create a new API key
 #[derive(Debug, Deserialize)]
@@ -41,7 +39,7 @@ fn default_tier() -> String {
 #[derive(Debug, Serialize)]
 pub struct CreateKeyResponse {
     pub id: Uuid,
-    pub api_key: String,  // Only shown once!
+    pub api_key: String, // Only shown once!
     pub key_prefix: String,
     pub name: String,
     pub tier: String,
@@ -149,10 +147,7 @@ pub async fn create_api_key(
 
 /// Get current API key info
 /// GET /api/v1/keys/me
-pub async fn get_my_key(
-    req: HttpRequest,
-    pool: web::Data<DbPool>,
-) -> HttpResponse {
+pub async fn get_my_key(req: HttpRequest, pool: web::Data<DbPool>) -> HttpResponse {
     let auth = match req.extensions().get::<ApiKeyAuth>().cloned() {
         Some(auth) => auth,
         None => {
@@ -166,29 +161,25 @@ pub async fn get_my_key(
     let repo = ApiKeyRepository::new(pool.get_ref().clone());
 
     match repo.get_by_id(auth.key_id).await {
-        Ok(Some(key)) => {
-            HttpResponse::Ok().json(ApiKeyInfo {
-                id: key.id,
-                key_prefix: key.key_prefix,
-                name: key.name,
-                owner_email: key.owner_email,
-                owner_name: key.owner_name,
-                company: key.company,
-                tier: key.tier,
-                rate_limit_per_minute: key.rate_limit_per_minute,
-                monthly_quota: key.monthly_quota,
-                is_active: key.is_active,
-                created_at: key.created_at,
-                last_used_at: key.last_used_at,
-                expires_at: key.expires_at,
-            })
-        }
-        Ok(None) => {
-            HttpResponse::NotFound().json(serde_json::json!({
-                "error": "not_found",
-                "message": "API key not found"
-            }))
-        }
+        Ok(Some(key)) => HttpResponse::Ok().json(ApiKeyInfo {
+            id: key.id,
+            key_prefix: key.key_prefix,
+            name: key.name,
+            owner_email: key.owner_email,
+            owner_name: key.owner_name,
+            company: key.company,
+            tier: key.tier,
+            rate_limit_per_minute: key.rate_limit_per_minute,
+            monthly_quota: key.monthly_quota,
+            is_active: key.is_active,
+            created_at: key.created_at,
+            last_used_at: key.last_used_at,
+            expires_at: key.expires_at,
+        }),
+        Ok(None) => HttpResponse::NotFound().json(serde_json::json!({
+            "error": "not_found",
+            "message": "API key not found"
+        })),
         Err(e) => {
             warn!(error = %e, "Failed to get API key");
             HttpResponse::InternalServerError().json(serde_json::json!({
@@ -226,29 +217,25 @@ pub async fn get_key_by_id(
     let repo = ApiKeyRepository::new(pool.get_ref().clone());
 
     match repo.get_by_id(key_id).await {
-        Ok(Some(key)) => {
-            HttpResponse::Ok().json(ApiKeyInfo {
-                id: key.id,
-                key_prefix: key.key_prefix,
-                name: key.name,
-                owner_email: key.owner_email,
-                owner_name: key.owner_name,
-                company: key.company,
-                tier: key.tier,
-                rate_limit_per_minute: key.rate_limit_per_minute,
-                monthly_quota: key.monthly_quota,
-                is_active: key.is_active,
-                created_at: key.created_at,
-                last_used_at: key.last_used_at,
-                expires_at: key.expires_at,
-            })
-        }
-        Ok(None) => {
-            HttpResponse::NotFound().json(serde_json::json!({
-                "error": "not_found",
-                "message": "API key not found"
-            }))
-        }
+        Ok(Some(key)) => HttpResponse::Ok().json(ApiKeyInfo {
+            id: key.id,
+            key_prefix: key.key_prefix,
+            name: key.name,
+            owner_email: key.owner_email,
+            owner_name: key.owner_name,
+            company: key.company,
+            tier: key.tier,
+            rate_limit_per_minute: key.rate_limit_per_minute,
+            monthly_quota: key.monthly_quota,
+            is_active: key.is_active,
+            created_at: key.created_at,
+            last_used_at: key.last_used_at,
+            expires_at: key.expires_at,
+        }),
+        Ok(None) => HttpResponse::NotFound().json(serde_json::json!({
+            "error": "not_found",
+            "message": "API key not found"
+        })),
         Err(e) => {
             warn!(error = %e, "Failed to get API key");
             HttpResponse::InternalServerError().json(serde_json::json!({
@@ -275,24 +262,30 @@ pub async fn list_keys(
 
             match repo.list_by_owner(&owner_email).await {
                 Ok(keys) => {
-                    let key_infos: Vec<ApiKeyInfo> = keys.into_iter().map(|key| ApiKeyInfo {
-                        id: key.id,
-                        key_prefix: key.key_prefix,
-                        name: key.name,
-                        owner_email: key.owner_email,
-                        owner_name: key.owner_name,
-                        company: key.company,
-                        tier: key.tier,
-                        rate_limit_per_minute: key.rate_limit_per_minute,
-                        monthly_quota: key.monthly_quota,
-                        is_active: key.is_active,
-                        created_at: key.created_at,
-                        last_used_at: key.last_used_at,
-                        expires_at: key.expires_at,
-                    }).collect();
+                    let key_infos: Vec<ApiKeyInfo> = keys
+                        .into_iter()
+                        .map(|key| ApiKeyInfo {
+                            id: key.id,
+                            key_prefix: key.key_prefix,
+                            name: key.name,
+                            owner_email: key.owner_email,
+                            owner_name: key.owner_name,
+                            company: key.company,
+                            tier: key.tier,
+                            rate_limit_per_minute: key.rate_limit_per_minute,
+                            monthly_quota: key.monthly_quota,
+                            is_active: key.is_active,
+                            created_at: key.created_at,
+                            last_used_at: key.last_used_at,
+                            expires_at: key.expires_at,
+                        })
+                        .collect();
 
                     let count = key_infos.len();
-                    return HttpResponse::Ok().json(ListKeysResponse { keys: key_infos, count });
+                    return HttpResponse::Ok().json(ListKeysResponse {
+                        keys: key_infos,
+                        count,
+                    });
                 }
                 Err(e) => {
                     warn!(error = %e, "Failed to list API keys");
@@ -312,29 +305,39 @@ pub async fn list_keys(
     };
 
     // Admin can list by any owner
-    let owner_email = query.owner_email.as_ref().map(|s| s.as_str()).unwrap_or(&auth.owner_email);
+    let owner_email = query
+        .owner_email
+        .as_ref()
+        .map(|s| s.as_str())
+        .unwrap_or(&auth.owner_email);
     let repo = ApiKeyRepository::new(pool.get_ref().clone());
 
     match repo.list_by_owner(owner_email).await {
         Ok(keys) => {
-            let key_infos: Vec<ApiKeyInfo> = keys.into_iter().map(|key| ApiKeyInfo {
-                id: key.id,
-                key_prefix: key.key_prefix,
-                name: key.name,
-                owner_email: key.owner_email,
-                owner_name: key.owner_name,
-                company: key.company,
-                tier: key.tier,
-                rate_limit_per_minute: key.rate_limit_per_minute,
-                monthly_quota: key.monthly_quota,
-                is_active: key.is_active,
-                created_at: key.created_at,
-                last_used_at: key.last_used_at,
-                expires_at: key.expires_at,
-            }).collect();
+            let key_infos: Vec<ApiKeyInfo> = keys
+                .into_iter()
+                .map(|key| ApiKeyInfo {
+                    id: key.id,
+                    key_prefix: key.key_prefix,
+                    name: key.name,
+                    owner_email: key.owner_email,
+                    owner_name: key.owner_name,
+                    company: key.company,
+                    tier: key.tier,
+                    rate_limit_per_minute: key.rate_limit_per_minute,
+                    monthly_quota: key.monthly_quota,
+                    is_active: key.is_active,
+                    created_at: key.created_at,
+                    last_used_at: key.last_used_at,
+                    expires_at: key.expires_at,
+                })
+                .collect();
 
             let count = key_infos.len();
-            HttpResponse::Ok().json(ListKeysResponse { keys: key_infos, count })
+            HttpResponse::Ok().json(ListKeysResponse {
+                keys: key_infos,
+                count,
+            })
         }
         Err(e) => {
             warn!(error = %e, "Failed to list API keys");
@@ -407,12 +410,10 @@ pub async fn revoke_key(
                 "key_id": key_id
             }))
         }
-        Ok(false) => {
-            HttpResponse::NotFound().json(serde_json::json!({
-                "error": "not_found",
-                "message": "API key not found"
-            }))
-        }
+        Ok(false) => HttpResponse::NotFound().json(serde_json::json!({
+            "error": "not_found",
+            "message": "API key not found"
+        })),
         Err(e) => {
             warn!(error = %e, "Failed to revoke API key");
             HttpResponse::InternalServerError().json(serde_json::json!({
