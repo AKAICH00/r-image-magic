@@ -4,6 +4,18 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: production
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  IMAGE_REPOSITORY: ghcr.io/akaich00/r-image-magic
 
 permissions:
   id-token: write
@@ -13,6 +25,36 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'production' }}
+    concurrency:
+      group: r-image-magic-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'production' }}
+      cancel-in-progress: false
+    env:
+      DEPLOY_ENVIRONMENT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'production' }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'akaich00-cluster' }}
+      ECS_SERVICE: ${{ vars.ECS_SERVICE || 'r-image-magic' }}
+      ECS_TASK_FAMILY: ${{ vars.ECS_TASK_FAMILY || 'r-image-magic' }}
+      GHCR_SECRET_NAME: ${{ vars.GHCR_SECRET_NAME || 'r-image-magic/ghcr-credentials' }}
+      SERVICE_NAME: ${{ vars.SERVICE_NAME || 'r-image-magic' }}
+      CONTAINER_NAME: ${{ vars.CONTAINER_NAME || 'r-image-magic' }}
+      CONTAINER_PORT: ${{ vars.CONTAINER_PORT || '8080' }}
+      TASK_CPU: ${{ vars.TASK_CPU || '1024' }}
+      TASK_MEMORY: ${{ vars.TASK_MEMORY || '2048' }}
+      AWS_LOG_GROUP: ${{ vars.AWS_LOG_GROUP || '/ecs/r-image-magic' }}
+      PRICING_URL: ${{ vars.PRICING_URL || 'https://r-image-magic.com/pricing' }}
+      DEFAULT_R2_BUCKET: ${{ vars.DEFAULT_R2_BUCKET || 'r-image-magic-pod-assets' }}
+      ECS_EXECUTION_ROLE_ARN: ${{ vars.ECS_EXECUTION_ROLE_ARN }}
+      ECS_TASK_ROLE_ARN: ${{ vars.ECS_TASK_ROLE_ARN }}
+      DATABASE_URL_SECRET_ARN: ${{ vars.MOCKUP_DATABASE_URL_SECRET_ARN }}
+      R2_ACCOUNT_ID_SECRET_ARN: ${{ vars.R2_ACCOUNT_ID_SECRET_ARN }}
+      R2_ACCESS_KEY_ID_SECRET_ARN: ${{ vars.R2_ACCESS_KEY_ID_SECRET_ARN }}
+      R2_SECRET_ACCESS_KEY_SECRET_ARN: ${{ vars.R2_SECRET_ACCESS_KEY_SECRET_ARN }}
+      PRINTFUL_ACCESS_TOKEN_SECRET_ARN: ${{ vars.PRINTFUL_ACCESS_TOKEN_SECRET_ARN }}
+      PRINTIFY_API_KEY_SECRET_ARN: ${{ vars.PRINTIFY_API_KEY_SECRET_ARN }}
+      GELATO_API_KEY_SECRET_ARN: ${{ vars.GELATO_API_KEY_SECRET_ARN }}
+      SPOD_ACCESS_TOKEN_SECRET_ARN: ${{ vars.SPOD_ACCESS_TOKEN_SECRET_ARN }}
+      GOOTEN_RECIPE_ID_SECRET_ARN: ${{ vars.GOOTEN_RECIPE_ID_SECRET_ARN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -20,7 +62,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::286119371519:role/github-actions-deploy
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Set up QEMU (for ARM64 cross-compile)
         uses: docker/setup-qemu-action@v3
@@ -44,8 +86,8 @@ jobs:
           platforms: linux/arm64
           push: true
           tags: |
-            ghcr.io/akaich00/r-image-magic:latest
-            ghcr.io/akaich00/r-image-magic:${{ github.sha }}
+            ${{ env.IMAGE_REPOSITORY }}:latest
+            ${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -57,7 +99,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          SECRET_NAME="teeswim/ghcr-credentials"
+          SECRET_NAME="${{ env.GHCR_SECRET_NAME }}"
           SECRET_PAYLOAD=$(jq -n \
             --arg username "$GHCR_USERNAME" \
             --arg password "$GHCR_PASSWORD" \
@@ -79,38 +121,84 @@ jobs:
 
       - name: Deploy to ECS
         run: |
-          IMAGE="ghcr.io/akaich00/r-image-magic:${{ github.sha }}"
-          DB_URL="${{ secrets.MOCKUP_DATABASE_URL }}"
+          set -euo pipefail
 
-          TASK_DEF=$(aws ecs describe-task-definition \
-            --task-definition r-image-magic \
-            --query 'taskDefinition' --output json)
-
-          NEW_TASK_DEF=$(echo "$TASK_DEF" | jq \
+          IMAGE="${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}"
+          NEW_TASK_DEF=$(jq \
             --arg IMAGE "$IMAGE" \
+            --arg TASK_FAMILY "${{ env.ECS_TASK_FAMILY }}" \
+            --arg CONTAINER_NAME "${{ env.CONTAINER_NAME }}" \
+            --arg SERVICE_NAME "${{ env.SERVICE_NAME }}" \
+            --arg CONTAINER_PORT "${{ env.CONTAINER_PORT }}" \
+            --arg TASK_CPU "${{ env.TASK_CPU }}" \
+            --arg TASK_MEMORY "${{ env.TASK_MEMORY }}" \
+            --arg EXECUTION_ROLE_ARN "${{ env.ECS_EXECUTION_ROLE_ARN }}" \
+            --arg TASK_ROLE_ARN "${{ env.ECS_TASK_ROLE_ARN }}" \
             --arg GHCR_SECRET_ARN "${{ steps.ghcr-secret.outputs.ghcr_secret_arn }}" \
-            --arg DB_URL "$DB_URL" \
-            '.containerDefinitions[0].image = $IMAGE |
-             .containerDefinitions[0].repositoryCredentials = {credentialsParameter: $GHCR_SECRET_ARN} |
-             .containerDefinitions[0].environment |= (
-               [.[]? | select(.name != "MOCKUP__DATABASE__URL")] +
-               [{"name": "MOCKUP__DATABASE__URL", "value": $DB_URL}]
-             ) |
-             del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
-                 .compatibilities, .registeredAt, .registeredBy)')
+            --arg AWS_REGION "${{ env.AWS_REGION }}" \
+            --arg AWS_LOG_GROUP "${{ env.AWS_LOG_GROUP }}" \
+            --arg PRICING_URL "${{ env.PRICING_URL }}" \
+            --arg DEFAULT_R2_BUCKET "${{ env.DEFAULT_R2_BUCKET }}" \
+            --arg DATABASE_URL_SECRET_ARN "${{ env.DATABASE_URL_SECRET_ARN }}" \
+            --arg R2_ACCOUNT_ID_SECRET_ARN "${{ env.R2_ACCOUNT_ID_SECRET_ARN }}" \
+            --arg R2_ACCESS_KEY_ID_SECRET_ARN "${{ env.R2_ACCESS_KEY_ID_SECRET_ARN }}" \
+            --arg R2_SECRET_ACCESS_KEY_SECRET_ARN "${{ env.R2_SECRET_ACCESS_KEY_SECRET_ARN }}" \
+            --arg PRINTFUL_ACCESS_TOKEN_SECRET_ARN "${{ env.PRINTFUL_ACCESS_TOKEN_SECRET_ARN }}" \
+            --arg PRINTIFY_API_KEY_SECRET_ARN "${{ env.PRINTIFY_API_KEY_SECRET_ARN }}" \
+            --arg GELATO_API_KEY_SECRET_ARN "${{ env.GELATO_API_KEY_SECRET_ARN }}" \
+            --arg SPOD_ACCESS_TOKEN_SECRET_ARN "${{ env.SPOD_ACCESS_TOKEN_SECRET_ARN }}" \
+            --arg GOOTEN_RECIPE_ID_SECRET_ARN "${{ env.GOOTEN_RECIPE_ID_SECRET_ARN }}" \
+            '
+              .family = $TASK_FAMILY |
+              .cpu = $TASK_CPU |
+              .memory = $TASK_MEMORY |
+              .executionRoleArn = $EXECUTION_ROLE_ARN |
+              .taskRoleArn = $TASK_ROLE_ARN |
+              .containerDefinitions[0].name = $CONTAINER_NAME |
+              .containerDefinitions[0].image = $IMAGE |
+              .containerDefinitions[0].repositoryCredentials.credentialsParameter = $GHCR_SECRET_ARN |
+              .containerDefinitions[0].portMappings[0].containerPort = ($CONTAINER_PORT | tonumber) |
+              .containerDefinitions[0].portMappings[0].hostPort = ($CONTAINER_PORT | tonumber) |
+              .containerDefinitions[0].healthCheck.command[1] = ("curl -f http://localhost:" + $CONTAINER_PORT + "/health || exit 1") |
+              .containerDefinitions[0].logConfiguration.options["awslogs-group"] = $AWS_LOG_GROUP |
+              .containerDefinitions[0].logConfiguration.options["awslogs-region"] = $AWS_REGION |
+              .containerDefinitions[0].environment = (.containerDefinitions[0].environment | map(
+                if .name == "MOCKUP_SERVICE__NAME" then .value = $SERVICE_NAME
+                elif .name == "MOCKUP_SERVICE__PRICING_URL" then .value = $PRICING_URL
+                elif .name == "MOCKUP_SERVICE__R2_BUCKET_DEFAULT" then .value = $DEFAULT_R2_BUCKET
+                else . end
+              )) |
+              .containerDefinitions[0].secrets = (
+                .containerDefinitions[0].secrets
+                | map(
+                    if .name == "DATABASE_URL" or .name == "MOCKUP_DATABASE__URL" then .valueFrom = $DATABASE_URL_SECRET_ARN
+                    elif .name == "R2_ACCOUNT_ID" then .valueFrom = $R2_ACCOUNT_ID_SECRET_ARN
+                    elif .name == "R2_ACCESS_KEY_ID" then .valueFrom = $R2_ACCESS_KEY_ID_SECRET_ARN
+                    elif .name == "R2_SECRET_ACCESS_KEY" then .valueFrom = $R2_SECRET_ACCESS_KEY_SECRET_ARN
+                    elif .name == "PRINTFUL_ACCESS_TOKEN" then .valueFrom = $PRINTFUL_ACCESS_TOKEN_SECRET_ARN
+                    elif .name == "PRINTIFY_API_KEY" then .valueFrom = $PRINTIFY_API_KEY_SECRET_ARN
+                    elif .name == "GELATO_API_KEY" then .valueFrom = $GELATO_API_KEY_SECRET_ARN
+                    elif .name == "SPOD_ACCESS_TOKEN" then .valueFrom = $SPOD_ACCESS_TOKEN_SECRET_ARN
+                    elif .name == "GOOTEN_RECIPE_ID" then .valueFrom = $GOOTEN_RECIPE_ID_SECRET_ARN
+                    else . end
+                  )
+                | map(select(.valueFrom != null and .valueFrom != "" and (.valueFrom | startswith("__") | not)))
+              )
+            ' \
+            ecs/task-definition.json)
 
           NEW_REVISION=$(aws ecs register-task-definition \
             --cli-input-json "$NEW_TASK_DEF" \
             --query 'taskDefinition.taskDefinitionArn' --output text)
 
           aws ecs update-service \
-            --cluster akaich00-cluster \
-            --service r-image-magic \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service "${{ env.ECS_SERVICE }}" \
             --task-definition "$NEW_REVISION" \
             --force-new-deployment
 
           aws ecs wait services-stable \
-            --cluster akaich00-cluster \
-            --services r-image-magic
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services "${{ env.ECS_SERVICE }}"
 
-          echo "✅ Deployed r-image-magic → ${{ github.sha }}"
+          echo "✅ Deployed ${{ env.ECS_SERVICE }} → ${{ github.sha }}"

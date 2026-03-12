@@ -23,8 +23,10 @@ spec:
         - containerPort: 8080
         env:
         # Database configuration
-        - name: MOCKUP__DATABASE__URL
+        - name: MOCKUP_DATABASE__URL
           value: postgresql://r_image_magic:RImageMagic2024Pass@postgres-cluster-rw.db-postgres.svc.cluster.local:5432/r_image_magic
+        - name: CONFIG_PATH
+          value: /app/config
         - name: RUST_LOG
           value: info
 

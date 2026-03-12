@@ -1,0 +1,64 @@
+{
+  "family": "__TASK_FAMILY__",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "__TASK_CPU__",
+  "memory": "__TASK_MEMORY__",
+  "runtimePlatform": {
+    "cpuArchitecture": "ARM64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "executionRoleArn": "__EXECUTION_ROLE_ARN__",
+  "taskRoleArn": "__TASK_ROLE_ARN__",
+  "containerDefinitions": [
+    {
+      "name": "__CONTAINER_NAME__",
+      "image": "__IMAGE__",
+      "repositoryCredentials": {
+        "credentialsParameter": "__GHCR_SECRET_ARN__"
+      },
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "RUST_LOG", "value": "info" },
+        { "name": "CONFIG_PATH", "value": "/app/config" },
+        { "name": "MOCKUP_SERVICE__NAME", "value": "__SERVICE_NAME__" },
+        { "name": "MOCKUP_SERVICE__PRICING_URL", "value": "__PRICING_URL__" },
+        { "name": "MOCKUP_SERVICE__R2_BUCKET_DEFAULT", "value": "__DEFAULT_R2_BUCKET__" }
+      ],
+      "secrets": [
+        { "name": "DATABASE_URL", "valueFrom": "__DATABASE_URL_SECRET_ARN__" },
+        { "name": "MOCKUP_DATABASE__URL", "valueFrom": "__DATABASE_URL_SECRET_ARN__" },
+        { "name": "R2_ACCOUNT_ID", "valueFrom": "__R2_ACCOUNT_ID_SECRET_ARN__" },
+        { "name": "R2_ACCESS_KEY_ID", "valueFrom": "__R2_ACCESS_KEY_ID_SECRET_ARN__" },
+        { "name": "R2_SECRET_ACCESS_KEY", "valueFrom": "__R2_SECRET_ACCESS_KEY_SECRET_ARN__" },
+        { "name": "PRINTFUL_ACCESS_TOKEN", "valueFrom": "__PRINTFUL_ACCESS_TOKEN_SECRET_ARN__" },
+        { "name": "PRINTIFY_API_KEY", "valueFrom": "__PRINTIFY_API_KEY_SECRET_ARN__" },
+        { "name": "GELATO_API_KEY", "valueFrom": "__GELATO_API_KEY_SECRET_ARN__" },
+        { "name": "SPOD_ACCESS_TOKEN", "valueFrom": "__SPOD_ACCESS_TOKEN_SECRET_ARN__" },
+        { "name": "GOOTEN_RECIPE_ID", "valueFrom": "__GOOTEN_RECIPE_ID_SECRET_ARN__" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 10
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "__AWS_LOG_GROUP__",
+          "awslogs-region": "__AWS_REGION__",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

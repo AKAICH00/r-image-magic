@@ -1,0 +1,33 @@
+# Dockerfile.prebuilt - uses pre-compiled ARM64 binary
+FROM --platform=linux/arm64 debian:bookworm-slim
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy pre-built binary
+COPY target/aarch64-unknown-linux-gnu/release/r-image-magic /app/r-image-magic
+
+# Copy assets and config
+COPY assets/ /app/assets/
+COPY config/ /app/config/
+
+# Create non-root user
+RUN useradd -r -s /bin/false appuser
+USER appuser
+
+EXPOSE 8080
+
+ENV RUST_LOG=info
+ENV CONFIG_PATH=/app/config
+ENV CONFIG_DIR=/app/config
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["/app/r-image-magic"]
