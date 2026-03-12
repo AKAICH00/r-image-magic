@@ -1,6 +1,7 @@
 //! Database connection pool management
 
 use deadpool_postgres::{Config, ManagerConfig, Pool, RecyclingMethod, Runtime};
+use percent_encoding::percent_decode_str;
 use thiserror::Error;
 use tracing::info;
 
@@ -44,8 +45,13 @@ impl DbPool {
             .host_str()
             .ok_or_else(|| DbError::Config("Missing host in DATABASE_URL".to_string()))?;
         let port = url.port().unwrap_or(5432);
-        let user = url.username();
-        let password = url.password().unwrap_or("");
+        let user = percent_decode_str(url.username())
+            .decode_utf8_lossy()
+            .to_string();
+        let password = url
+            .password()
+            .map(|p| percent_decode_str(p).decode_utf8_lossy().to_string())
+            .unwrap_or_default();
         let dbname = url.path().trim_start_matches('/');
 
         // Check if SSL is requested

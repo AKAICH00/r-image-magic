@@ -45,6 +45,7 @@ tokio-postgres-rustls = "0.12"
 rustls = { version = "0.23", features = ["ring"] }
 webpki-roots = "0.26"
 url = "2.5"
+percent-encoding = "2"
 
 # Utilities
 uuid = { version = "1.6", features = ["v4", "serde"] }
