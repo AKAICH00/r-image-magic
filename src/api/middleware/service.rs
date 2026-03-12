@@ -9,15 +9,16 @@ use actix_web::{
     http::StatusCode,
     Error, HttpMessage, HttpResponse,
 };
-use futures::future::{ok, Ready, LocalBoxFuture};
+use futures::future::{ok, LocalBoxFuture, Ready};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::{info, warn};
 
-use crate::db::{ApiKeyRepository, UsageRepository, DbPool, UsageLogEntry};
 use super::auth::{extract_api_key, validate_api_key, ApiKeyAuth};
 use super::rate_limit::{RATE_LIMIT_LIMIT, RATE_LIMIT_REMAINING, RATE_LIMIT_RESET};
+use crate::config::pricing_url;
+use crate::db::{ApiKeyRepository, DbPool, UsageLogEntry, UsageRepository};
 
 /// Middleware factory for API authentication and rate limiting
 pub struct ApiMiddleware {
@@ -90,7 +91,10 @@ where
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&self, ctx: &mut core::task::Context<'_>) -> core::task::Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &self,
+        ctx: &mut core::task::Context<'_>,
+    ) -> core::task::Poll<Result<(), Self::Error>> {
         self.service.poll_ready(ctx)
     }
 
@@ -138,11 +142,10 @@ where
             let db_key = match validate_api_key(&api_key, &api_key_repo).await {
                 Ok(key) => key,
                 Err(e) => {
-                    let response = HttpResponse::Unauthorized()
-                        .json(serde_json::json!({
-                            "error": "unauthorized",
-                            "message": e.to_string()
-                        }));
+                    let response = HttpResponse::Unauthorized().json(serde_json::json!({
+                        "error": "unauthorized",
+                        "message": e.to_string()
+                    }));
                     return Ok(req.into_response(response).map_into_right_body());
                 }
             };
@@ -159,17 +162,18 @@ where
                 Ok(status) => status,
                 Err(e) => {
                     warn!(error = %e, "Rate limit check failed");
-                    let response = HttpResponse::InternalServerError()
-                        .json(serde_json::json!({
-                            "error": "internal_error",
-                            "message": "Rate limit check failed"
-                        }));
+                    let response = HttpResponse::InternalServerError().json(serde_json::json!({
+                        "error": "internal_error",
+                        "message": "Rate limit check failed"
+                    }));
                     return Ok(req.into_response(response).map_into_right_body());
                 }
             };
 
             if !rate_status.allowed {
-                let seconds_until_reset = (rate_status.reset_at - chrono::Utc::now()).num_seconds().max(1);
+                let seconds_until_reset = (rate_status.reset_at - chrono::Utc::now())
+                    .num_seconds()
+                    .max(1);
                 let response = HttpResponse::TooManyRequests()
                     .insert_header((RATE_LIMIT_LIMIT, rate_status.limit.to_string()))
                     .insert_header((RATE_LIMIT_REMAINING, "0"))
@@ -189,12 +193,13 @@ where
             match usage_repo.check_quota(key_id, monthly_quota).await {
                 Ok(true) => {} // Quota OK
                 Ok(false) => {
+                    let upgrade_url = pricing_url();
                     let response = HttpResponse::PaymentRequired()
                         .json(serde_json::json!({
                             "error": "quota_exceeded",
                             "message": format!("Monthly quota of {} requests exceeded. Upgrade your plan for more requests.", monthly_quota),
                             "quota": monthly_quota,
-                            "upgrade_url": "https://r-image-magic.com/pricing"
+                            "upgrade_url": upgrade_url
                         }));
                     return Ok(req.into_response(response).map_into_right_body());
                 }
@@ -219,7 +224,13 @@ where
             let response_time_ms = start.elapsed().as_millis() as i32;
 
             let error_info = if status_code.is_client_error() || status_code.is_server_error() {
-                Some((status_code.to_string(), status_code.canonical_reason().unwrap_or("Unknown error").to_string()))
+                Some((
+                    status_code.to_string(),
+                    status_code
+                        .canonical_reason()
+                        .unwrap_or("Unknown error")
+                        .to_string(),
+                ))
             } else {
                 None
             };
@@ -250,23 +261,14 @@ where
             let mut res = res.map_into_left_body();
             let headers = res.headers_mut();
             if let Ok(limit) = rate_status.limit.to_string().parse() {
-                headers.insert(
-                    RATE_LIMIT_LIMIT.parse().unwrap(),
-                    limit,
-                );
+                headers.insert(RATE_LIMIT_LIMIT.parse().unwrap(), limit);
             }
             let remaining = (rate_status.limit - rate_status.current_count).max(0);
             if let Ok(rem) = remaining.to_string().parse() {
-                headers.insert(
-                    RATE_LIMIT_REMAINING.parse().unwrap(),
-                    rem,
-                );
+                headers.insert(RATE_LIMIT_REMAINING.parse().unwrap(), rem);
             }
             if let Ok(reset) = rate_status.reset_at.timestamp().to_string().parse() {
-                headers.insert(
-                    RATE_LIMIT_RESET.parse().unwrap(),
-                    reset,
-                );
+                headers.insert(RATE_LIMIT_RESET.parse().unwrap(), reset);
             }
 
             Ok(res)

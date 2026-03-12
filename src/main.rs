@@ -4,24 +4,24 @@
 //! Features true displacement mapping for realistic product mockups.
 //! Designed for 10K+ concurrent connections.
 
-use actix_web::{web, App, HttpServer, middleware};
+use actix_web::{middleware, web, App, HttpServer};
+use std::sync::Arc;
 use tracing::info;
 use tracing_actix_web::TracingLogger;
-use std::sync::Arc;
 
 mod api;
-mod domain;
-mod engine;
 mod config;
 mod db;
+mod domain;
+mod engine;
 mod providers;
 mod storage;
 mod sync;
 
-use crate::config::Settings;
-use crate::engine::TemplateManager;
-use crate::db::{DbPool, TemplateRepository};
 use crate::api::middleware::ApiMiddleware;
+use crate::config::{service_name, Settings};
+use crate::db::{DbPool, TemplateRepository};
+use crate::engine::TemplateManager;
 
 /// Application state shared across all handlers
 pub struct AppState {
@@ -33,6 +33,11 @@ pub struct AppState {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Install rustls CryptoProvider before any TLS usage
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls CryptoProvider");
+
     // Load environment variables from .env file
     dotenvy::dotenv().ok();
 
@@ -41,7 +46,7 @@ async fn main() -> std::io::Result<()> {
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive("r_image_magic=info".parse().unwrap())
-                .add_directive("actix_web=info".parse().unwrap())
+                .add_directive("actix_web=info".parse().unwrap()),
         )
         .json()
         .init();
@@ -59,11 +64,14 @@ async fn main() -> std::io::Result<()> {
     // Initialize template manager and load templates
     let template_manager = Arc::new(
         TemplateManager::new(&settings.templates.path)
-            .expect("Failed to initialize template manager")
+            .expect("Failed to initialize template manager"),
     );
 
     // Load all templates into memory at startup
-    template_manager.load_all().await.expect("Failed to load templates");
+    template_manager
+        .load_all()
+        .await
+        .expect("Failed to load templates");
     info!("Loaded {} templates", template_manager.template_count());
 
     // Initialize database connection if DATABASE_URL is configured
@@ -72,7 +80,10 @@ async fn main() -> std::io::Result<()> {
             Ok(pool) => {
                 // Test the connection
                 if let Err(e) = pool.test_connection().await {
-                    tracing::warn!("Database connection test failed: {}. Running without database.", e);
+                    tracing::warn!(
+                        "Database connection test failed: {}. Running without database.",
+                        e
+                    );
                     (None, None)
                 } else {
                     let repo = TemplateRepository::new(pool.clone());
@@ -81,7 +92,10 @@ async fn main() -> std::io::Result<()> {
                 }
             }
             Err(e) => {
-                tracing::warn!("Failed to create database pool: {}. Running without database.", e);
+                tracing::warn!(
+                    "Failed to create database pool: {}. Running without database.",
+                    e
+                );
                 (None, None)
             }
         }
@@ -104,8 +118,8 @@ async fn main() -> std::io::Result<()> {
 
     // Configure and start HTTP server
     HttpServer::new(move || {
-        let mut app = App::new()
-            .app_data(app_state.clone());
+        let header_service_name = service_name();
+        let mut app = App::new().app_data(app_state.clone());
 
         // Add database pool as web::Data if available
         if let Some(ref pool) = pool_data {
@@ -121,8 +135,8 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Compress::default())
             .wrap(
                 middleware::DefaultHeaders::new()
-                    .add(("X-Service", "r-image-magic"))
-                    .add(("X-Version", env!("CARGO_PKG_VERSION")))
+                    .add(("X-Service", header_service_name.clone()))
+                    .add(("X-Version", env!("CARGO_PKG_VERSION"))),
             )
             // Routes
             .configure(api::configure_routes)

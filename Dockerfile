@@ -53,6 +53,7 @@ EXPOSE 8080
 
 # Set environment variables
 ENV RUST_LOG=info
+ENV CONFIG_PATH=/app/config
 ENV CONFIG_DIR=/app/config
 
 # Health check (using curl)

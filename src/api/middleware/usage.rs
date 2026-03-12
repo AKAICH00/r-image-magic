@@ -3,18 +3,15 @@
 //! Records API usage for billing and analytics.
 //! Tracks request counts, response times, and errors per API key.
 
-use actix_web::{
-    dev::ServiceRequest,
-    http::StatusCode,
-    HttpMessage,
-};
+use actix_web::{dev::ServiceRequest, http::StatusCode, HttpMessage};
 use chrono::Utc;
 use std::net::IpAddr;
 use std::time::Instant;
 use tracing::{info, warn};
 
-use crate::db::{UsageRepository, UsageLogEntry};
 use super::auth::ApiKeyAuth;
+use crate::config::pricing_url;
+use crate::db::{UsageLogEntry, UsageRepository};
 
 /// Request timing context
 #[derive(Clone, Debug)]
@@ -24,7 +21,9 @@ pub struct RequestTiming {
 
 impl RequestTiming {
     pub fn new() -> Self {
-        Self { start: Instant::now() }
+        Self {
+            start: Instant::now(),
+        }
     }
 
     pub fn elapsed_ms(&self) -> i32 {
@@ -109,10 +108,7 @@ pub fn log_usage_async(
 }
 
 /// Check if API key has remaining quota
-pub async fn check_quota(
-    auth: &ApiKeyAuth,
-    usage_repo: &UsageRepository,
-) -> Result<bool, String> {
+pub async fn check_quota(auth: &ApiKeyAuth, usage_repo: &UsageRepository) -> Result<bool, String> {
     usage_repo
         .check_quota(auth.key_id, auth.monthly_quota)
         .await
@@ -129,6 +125,7 @@ pub struct QuotaExceededInfo {
 
 impl QuotaExceededInfo {
     pub fn to_json(&self) -> serde_json::Value {
+        let upgrade_url = pricing_url();
         serde_json::json!({
             "error": "quota_exceeded",
             "message": format!(
@@ -138,7 +135,7 @@ impl QuotaExceededInfo {
             "quota": self.monthly_quota,
             "usage": self.current_usage,
             "tier": self.tier,
-            "upgrade_url": "https://r-image-magic.com/pricing"
+            "upgrade_url": upgrade_url
         })
     }
 }

@@ -1,4 +1,4 @@
-# Teeswim Mockup Service Configuration
+# R-Image-Magic Service Configuration
 
 [server]
 host = "0.0.0.0"
@@ -15,7 +15,7 @@ api_secret = ""
 upload_preset = "mockups"
 
 [database]
-url = "postgresql://r_image_magic:RImageMagic2024Pass@100.120.113.6:5432/r_image_magic"
+url = ""
 max_connections = 10
 
 [performance]
