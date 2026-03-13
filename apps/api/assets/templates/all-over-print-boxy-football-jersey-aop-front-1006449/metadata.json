@@ -1,0 +1,44 @@
+{
+  "id": "all-over-print-boxy-football-jersey-aop-front-1006449",
+  "name": "All-Over Print Boxy Football Jersey (Front)",
+  "version": 1,
+  "category": "all-over-print-boxy-football-jersey-aop",
+  "color": "white",
+  "color_hex": null,
+  "placement": "front",
+  "product": "All-Over Print Boxy Football Jersey",
+  "product_type": "all-over-print-boxy-football-jersey-aop",
+  "printful_product_id": 1367,
+  "printful_template_id": 1006449,
+  "dimensions": {
+    "width": 3000,
+    "height": 3000.0
+  },
+  "print_area": {
+    "x": 600,
+    "y": 450,
+    "width": 1800,
+    "height": 2100.0
+  },
+  "anchor_point": {
+    "x": 1500,
+    "y": 1500.0
+  },
+  "displacement": {
+    "enabled": true,
+    "strength_default": 8.0,
+    "strength_range": [
+      4.0,
+      16.0
+    ]
+  },
+  "blend_mode": "multiply",
+  "default_opacity": 240,
+  "printfile": {
+    "id": 200,
+    "width": 6000,
+    "height": 6000,
+    "dpi": 150,
+    "fill_mode": "cover"
+  }
+}

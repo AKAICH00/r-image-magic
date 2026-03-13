@@ -1,0 +1,44 @@
+{
+  "id": "hat-front-159451",
+  "name": "adidas Dad Hat (Front)",
+  "version": 1,
+  "category": "hat",
+  "color": "white",
+  "color_hex": null,
+  "placement": "front",
+  "product": "adidas Dad Hat",
+  "product_type": "hat",
+  "printful_product_id": 638,
+  "printful_template_id": 159451,
+  "dimensions": {
+    "width": 3000,
+    "height": 3000.0
+  },
+  "print_area": {
+    "x": 600,
+    "y": 450,
+    "width": 1800,
+    "height": 2100.0
+  },
+  "anchor_point": {
+    "x": 1500,
+    "y": 1500.0
+  },
+  "displacement": {
+    "enabled": true,
+    "strength_default": 8.0,
+    "strength_range": [
+      4.0,
+      16.0
+    ]
+  },
+  "blend_mode": "multiply",
+  "default_opacity": 240,
+  "printfile": {
+    "id": 76,
+    "width": 600,
+    "height": 300,
+    "dpi": 300,
+    "fill_mode": "fit"
+  }
+}
