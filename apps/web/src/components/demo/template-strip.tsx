@@ -19,7 +19,9 @@ export function TemplateStrip({
     <div className="section-frame px-5 py-5">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h3 className="text-base font-semibold text-foreground">Pick a template</h3>
+          <h3 className="text-base font-semibold text-foreground">
+            Pick a template
+          </h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Click a product and the demo will regenerate automatically.
           </p>
@@ -30,7 +32,7 @@ export function TemplateStrip({
           <button
             key={template.id}
             onClick={() => onSelect(template)}
-            className={`group min-w-[8.25rem] rounded-[1.4rem] border px-3 py-3 text-left transition ${
+            className={`group min-w-[8.25rem] rounded-[1.4rem] border px-3 py-3 text-left transition-all duration-150 active:scale-[0.96] ${
               template.id === selectedTemplateId
                 ? "border-[#151b26] bg-[#151b26] text-white shadow-lg"
                 : "border-black/8 bg-white hover:border-[#151b26]/35"
@@ -46,10 +48,14 @@ export function TemplateStrip({
                 sizes="8.25rem"
               />
             </div>
-            <span className="mt-3 block text-sm font-semibold">{template.label}</span>
+            <span className="mt-3 block text-sm font-semibold">
+              {template.label}
+            </span>
             <span
               className={`text-xs uppercase tracking-[0.18em] ${
-                template.id === selectedTemplateId ? "text-white/62" : "text-muted-foreground"
+                template.id === selectedTemplateId
+                  ? "text-white/62"
+                  : "text-muted-foreground"
               }`}
             >
               {template.type}
