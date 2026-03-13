@@ -34,8 +34,12 @@ export function MockupResult({
       setShowNew(false);
       requestAnimationFrame(() => {
         setShowNew(true);
-        previousUrlRef.current = result.mockupUrl;
       });
+      // Update previous ref AFTER the 300ms crossfade completes
+      const timeout = setTimeout(() => {
+        previousUrlRef.current = result.mockupUrl;
+      }, 300);
+      return () => clearTimeout(timeout);
     }
   }, [result?.mockupUrl]);
 
