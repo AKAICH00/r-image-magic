@@ -1,0 +1,44 @@
+{
+  "id": "area-rug-front-1065782",
+  "name": "Area Rug (Front)",
+  "version": 1,
+  "category": "area-rug",
+  "color": "white",
+  "color_hex": null,
+  "placement": "front",
+  "product": "Area Rug",
+  "product_type": "area-rug",
+  "printful_product_id": 924,
+  "printful_template_id": 1065782,
+  "dimensions": {
+    "width": 2000,
+    "height": 2000.0
+  },
+  "print_area": {
+    "x": 400,
+    "y": 300,
+    "width": 1200,
+    "height": 1400.0
+  },
+  "anchor_point": {
+    "x": 1000,
+    "y": 1000.0
+  },
+  "displacement": {
+    "enabled": true,
+    "strength_default": 8.0,
+    "strength_range": [
+      4.0,
+      16.0
+    ]
+  },
+  "blend_mode": "multiply",
+  "default_opacity": 240,
+  "printfile": {
+    "id": 1030,
+    "width": 5700,
+    "height": 9300,
+    "dpi": 150,
+    "fill_mode": "cover"
+  }
+}

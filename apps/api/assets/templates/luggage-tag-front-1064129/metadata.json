@@ -1,0 +1,44 @@
+{
+  "id": "luggage-tag-front-1064129",
+  "name": "Luggage Tag (Front)",
+  "version": 1,
+  "category": "luggage-tag",
+  "color": "white",
+  "color_hex": null,
+  "placement": "front",
+  "product": "Luggage Tag",
+  "product_type": "luggage-tag",
+  "printful_product_id": 938,
+  "printful_template_id": 1064129,
+  "dimensions": {
+    "width": 3000,
+    "height": 3000.0
+  },
+  "print_area": {
+    "x": 600,
+    "y": 450,
+    "width": 1800,
+    "height": 2100.0
+  },
+  "anchor_point": {
+    "x": 1500,
+    "y": 1500.0
+  },
+  "displacement": {
+    "enabled": true,
+    "strength_default": 8.0,
+    "strength_range": [
+      4.0,
+      16.0
+    ]
+  },
+  "blend_mode": "multiply",
+  "default_opacity": 240,
+  "printfile": {
+    "id": 1439,
+    "width": 750,
+    "height": 1237,
+    "dpi": 300,
+    "fill_mode": "cover"
+  }
+}
