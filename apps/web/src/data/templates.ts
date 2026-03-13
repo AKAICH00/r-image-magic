@@ -26,7 +26,7 @@ export const templateCategories: TemplateCategory[] = [
     label: "Mugs",
     count: 5,
     thumbnailSrc: "/templates/template-mug.png",
-    templateId: "mug-front-919",
+    templateId: "mug-11oz-front-919",
   },
   {
     productType: "phone-case",

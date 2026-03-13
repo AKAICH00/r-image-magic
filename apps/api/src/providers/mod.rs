@@ -17,8 +17,12 @@
 //! └───────┘   └────────┘  └────────┘  └──────┘   └────────┘
 //! ```
 
+pub mod gelato;
+pub mod gooten;
 pub mod http_client;
 pub mod printful;
+pub mod printify;
+pub mod spod;
 pub mod traits;
 
 // Re-export commonly used types

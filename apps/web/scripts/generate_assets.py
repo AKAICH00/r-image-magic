@@ -233,11 +233,11 @@ def main() -> None:
 
     compose_mockup("white_male_front", sample_paths[0], "tshirt")
     compose_mockup("hoodie-aop-front-132947", sample_paths[1], "hoodie")
-    compose_mockup("mug-front-919", sample_paths[2], "mug")
+    compose_mockup("mug-11oz-front-919", sample_paths[2], "mug")
 
     build_template_thumbnail("white_male_front", "template-tshirt.png", centering=(0.5, 0.24))
     build_template_thumbnail("hoodie-aop-front-132947", "template-hoodie.png", centering=(0.5, 0.24))
-    build_template_thumbnail("mug-front-919", "template-mug.png", centering=(0.5, 0.52))
+    build_template_thumbnail("mug-11oz-front-919", "template-mug.png", centering=(0.5, 0.52))
     build_template_thumbnail("phone-case-front-146439", "template-phone-case.png", centering=(0.5, 0.35))
     build_template_thumbnail("pillow-front-22665", "template-pillow.png", centering=(0.5, 0.45))
     build_template_thumbnail("poster-front-21372", "template-poster.png", centering=(0.5, 0.3))

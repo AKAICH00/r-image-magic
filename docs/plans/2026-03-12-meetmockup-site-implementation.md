@@ -629,7 +629,7 @@ export interface TemplateCategory {
 export const templateCategories: TemplateCategory[] = [
   { productType: "tshirt", label: "T-Shirts", count: 7, thumbnailId: "white_male_front" },
   { productType: "hoodie", label: "Hoodies", count: 6, thumbnailId: "hoodie-aop-front-132947" },
-  { productType: "mug", label: "Mugs", count: 9, thumbnailId: "mug-front-919" },
+  { productType: "mug", label: "Mugs", count: 9, thumbnailId: "mug-11oz-front-919" },
   { productType: "phone-case", label: "Phone Cases", count: 6, thumbnailId: "phone-case-front-146439" },
   { productType: "pillow", label: "Pillows", count: 6, thumbnailId: "pillow-front-22665" },
   { productType: "poster", label: "Posters", count: 6, thumbnailId: "poster-front-21372" },
@@ -1008,7 +1008,7 @@ import { MockupResult } from "./mockup-result";
 const DEMO_TEMPLATES = [
   { id: "white_male_front", label: "T-Shirt", type: "tshirt" },
   { id: "hoodie-aop-front-132947", label: "Hoodie", type: "hoodie" },
-  { id: "mug-front-919", label: "Mug", type: "mug" },
+  { id: "mug-11oz-front-919", label: "Mug", type: "mug" },
   { id: "phone-case-front-146439", label: "Phone Case", type: "phone-case" },
   { id: "pillow-front-22665", label: "Pillow", type: "pillow" },
   { id: "poster-front-21372", label: "Poster", type: "poster" },

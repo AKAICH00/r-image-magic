@@ -244,10 +244,18 @@ impl ProviderFactory {
             "printful" => Some(Box::new(crate::providers::printful::PrintfulProvider::new(
                 credentials,
             ))),
-            // "printify" => Some(Box::new(crate::providers::printify::PrintifyProvider::new(credentials))),
-            // "gelato" => Some(Box::new(crate::providers::gelato::GelatoProvider::new(credentials))),
-            // "spod" => Some(Box::new(crate::providers::spod::SpodProvider::new(credentials))),
-            // "gooten" => Some(Box::new(crate::providers::gooten::GootenProvider::new(credentials))),
+            "printify" => Some(Box::new(crate::providers::printify::PrintifyProvider::new(
+                credentials,
+            ))),
+            "gelato" => Some(Box::new(crate::providers::gelato::GelatoProvider::new(
+                credentials,
+            ))),
+            "spod" => Some(Box::new(crate::providers::spod::SpodProvider::new(
+                credentials,
+            ))),
+            "gooten" => Some(Box::new(crate::providers::gooten::GootenProvider::new(
+                credentials,
+            ))),
             _ => None,
         }
     }

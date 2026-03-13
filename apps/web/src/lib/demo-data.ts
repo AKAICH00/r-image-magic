@@ -26,7 +26,7 @@ export const demoTemplates: DemoTemplate[] = [
     previewSrc: "/templates/template-hoodie.png",
   },
   {
-    id: "mug-front-919",
+    id: "mug-11oz-front-919",
     label: "Mug",
     type: "mug",
     previewSrc: "/templates/template-mug.png",
