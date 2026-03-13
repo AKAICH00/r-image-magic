@@ -12,6 +12,7 @@ use crate::api::handlers::{
         ProductTypeCount, ProductTypesResponse, TemplateApiError, TemplateErrorResponse,
         TemplateResponse, TemplatesListResponse,
     },
+    tile::{TileMetadata, TileRequest, TileResponse},
 };
 use crate::db::models::{DimensionsInfo, PrintAreaInfo, TemplateInfo};
 use crate::domain::{CoordinateSpace, PlacementSpec, PlacementType};
@@ -46,11 +47,16 @@ use crate::domain::{CoordinateSpace, PlacementSpec, PlacementType};
         crate::api::handlers::templates::get_template,
         crate::api::handlers::templates::list_product_types,
         crate::api::handlers::templates::get_by_product_type,
+        crate::api::handlers::tile::tile_pattern,
     ),
     components(
         schemas(
             // Health schemas
             HealthResponse,
+            // Tile schemas
+            TileRequest,
+            TileResponse,
+            TileMetadata,
             // Generate schemas
             GenerateRequest,
             GenerateOptions,

@@ -7,3 +7,4 @@ pub mod keys;
 pub mod sync;
 pub mod templates;
 pub mod usage;
+pub mod tile;

@@ -14,6 +14,9 @@ use crate::api::openapi::ApiDoc;
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api/v1")
+            .service(
+                web::scope("/tile").route("", web::post().to(handlers::tile::tile_pattern)),
+            )
             .service(web::scope("/mockups").route(
                 "/generate",
                 web::post().to(handlers::generate::generate_mockup),
