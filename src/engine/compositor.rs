@@ -33,6 +33,7 @@ pub struct MockupRequest {
     pub template_id: String,
     pub placement: PlacementSpec,
     pub displacement_strength: f64,
+    pub tint_color: Option<String>,
 }
 
 /// Result of mockup generation
@@ -41,6 +42,18 @@ pub struct MockupResult {
     pub width: u32,
     pub height: u32,
     pub bytes: Bytes,
+}
+
+/// Parse a hex color string (with or without leading '#') into (r, g, b)
+fn parse_hex_color(hex: &str) -> Option<(u8, u8, u8)> {
+    let hex = hex.strip_prefix('#').unwrap_or(hex);
+    if hex.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    Some((r, g, b))
 }
 
 /// Image compositor for generating mockups
@@ -123,8 +136,27 @@ impl Compositor {
             "Calculated design position"
         );
 
+        // Apply product color tinting if requested (skip for white / no tint)
+        let tinted_base;
+        let base_ref = match request.tint_color.as_deref().and_then(|hex| {
+            let parsed = parse_hex_color(hex)?;
+            // Skip tinting for white — no visible change
+            if parsed == (255, 255, 255) {
+                None
+            } else {
+                Some(parsed)
+            }
+        }) {
+            Some((r, g, b)) => {
+                debug!(r, g, b, "Applying product tint");
+                tinted_base = Self::tint_template(&template.base_image, r, g, b);
+                &tinted_base
+            }
+            None => &template.base_image,
+        };
+
         let composited = self.composite_design(
-            &template.base_image,
+            base_ref,
             &processed_design,
             abs_x,
             abs_y,
@@ -298,6 +330,30 @@ impl Compositor {
         Rgba(result)
     }
 
+    /// Apply a multiply-blend tint to a white-base template image.
+    /// White pixels become the tint color; darker fabric texture pixels become proportionally darker.
+    fn tint_template(base: &DynamicImage, r: u8, g: u8, b: u8) -> DynamicImage {
+        let rgba = base.to_rgba8();
+        let (width, height) = rgba.dimensions();
+        let mut output = RgbaImage::new(width, height);
+
+        for y in 0..height {
+            for x in 0..width {
+                let pixel = rgba.get_pixel(x, y);
+                if pixel.0[3] == 0 {
+                    output.put_pixel(x, y, *pixel);
+                    continue;
+                }
+                let tinted_r = (pixel.0[0] as u16 * r as u16 / 255) as u8;
+                let tinted_g = (pixel.0[1] as u16 * g as u16 / 255) as u8;
+                let tinted_b = (pixel.0[2] as u16 * b as u16 / 255) as u8;
+                output.put_pixel(x, y, Rgba([tinted_r, tinted_g, tinted_b, pixel.0[3]]));
+            }
+        }
+
+        DynamicImage::ImageRgba8(output)
+    }
+
     /// Encode image to PNG bytes (preserves RGBA transparency)
     fn encode_png(&self, image: &DynamicImage) -> Result<Vec<u8>, CompositorError> {
         let mut buffer = Vec::new();
@@ -375,5 +431,45 @@ impl Compositor {
 impl Default for Compositor {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_hex_color() {
+        assert_eq!(parse_hex_color("0D0D0D"), Some((13, 13, 13)));
+        assert_eq!(parse_hex_color("#FF0000"), Some((255, 0, 0)));
+        assert_eq!(parse_hex_color("FFFFFF"), Some((255, 255, 255)));
+        assert_eq!(parse_hex_color("abc"), None);
+        assert_eq!(parse_hex_color("ZZZZZZ"), None);
+        assert_eq!(parse_hex_color(""), None);
+    }
+
+    #[test]
+    fn test_tint_white_pixel() {
+        let img = DynamicImage::ImageRgba8(RgbaImage::from_pixel(1, 1, Rgba([255, 255, 255, 255])));
+        let tinted = Compositor::tint_template(&img, 13, 13, 13);
+        let pixel = tinted.to_rgba8().get_pixel(0, 0).0;
+        assert_eq!(pixel, [13, 13, 13, 255]);
+    }
+
+    #[test]
+    fn test_tint_preserves_transparency() {
+        let img = DynamicImage::ImageRgba8(RgbaImage::from_pixel(1, 1, Rgba([255, 255, 255, 0])));
+        let tinted = Compositor::tint_template(&img, 13, 13, 13);
+        let pixel = tinted.to_rgba8().get_pixel(0, 0).0;
+        assert_eq!(pixel[3], 0);
+    }
+
+    #[test]
+    fn test_tint_gray_pixel() {
+        let img = DynamicImage::ImageRgba8(RgbaImage::from_pixel(1, 1, Rgba([128, 128, 128, 255])));
+        let tinted = Compositor::tint_template(&img, 255, 0, 0);
+        let pixel = tinted.to_rgba8().get_pixel(0, 0).0;
+        // 128 * 255 / 255 = 128, 128 * 0 / 255 = 0
+        assert_eq!(pixel, [128, 0, 0, 255]);
     }
 }

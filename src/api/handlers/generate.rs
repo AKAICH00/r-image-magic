@@ -30,6 +30,8 @@ pub struct GenerateOptions {
     /// Displacement strength (0-30, default 10)
     #[serde(default = "default_displacement")]
     pub displacement_strength: f64,
+    /// Hex color to tint the product template (e.g. "0D0D0D" for black)
+    pub tint_color: Option<String>,
 }
 
 fn default_displacement() -> f64 {
@@ -134,6 +136,7 @@ pub async fn generate_mockup(
         template_id: body.template_id.clone(),
         placement,
         displacement_strength: body.options.displacement_strength,
+        tint_color: body.options.tint_color.clone(),
     };
 
     // Generate mockup (this is the heavy lifting)
