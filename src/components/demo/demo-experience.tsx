@@ -8,6 +8,12 @@ import {
   type DemoDesign,
   type DemoTemplate,
 } from "@/lib/demo-data";
+import {
+  CORE_COLORS,
+  TINTABLE_PRODUCT_TYPES,
+  type MockupColor,
+} from "@/lib/colors";
+import { ColorStrip } from "@/components/demo/color-strip";
 import { DesignUploader } from "@/components/demo/design-uploader";
 import { MockupResult } from "@/components/demo/mockup-result";
 import { TemplateStrip } from "@/components/demo/template-strip";
@@ -42,6 +48,9 @@ export function DemoExperience({
   const [result, setResult] = useState<DemoResultState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedColor, setSelectedColor] = useState<MockupColor>(
+    CORE_COLORS[0],
+  );
   const [isUploading, setIsUploading] = useState(false);
   const objectUrlRef = useRef<string | null>(null);
   const didInitialRequest = useRef(false);
@@ -49,7 +58,7 @@ export function DemoExperience({
     "Live demo preview is disabled locally until `MEETMOCKUP_API_KEY` and a public `NEXT_PUBLIC_SITE_URL` are configured.";
 
   const generate = useCallback(
-    async (template: DemoTemplate, designUrl: string) => {
+    async (template: DemoTemplate, designUrl: string, tintHex?: string) => {
       if (!demoReady) {
         return;
       }
@@ -58,6 +67,11 @@ export function DemoExperience({
       setError(null);
 
       try {
+        const options: Record<string, unknown> = {};
+        if (tintHex && tintHex !== "FFFFFF") {
+          options.tint_color = tintHex;
+        }
+
         const response = await fetch("/api/demo/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -69,6 +83,7 @@ export function DemoExperience({
               offset_x: 0,
               offset_y: -50,
             },
+            ...(Object.keys(options).length > 0 && { options }),
           }),
         });
 
@@ -99,8 +114,12 @@ export function DemoExperience({
     if (didInitialRequest.current || !demoReady) return;
 
     didInitialRequest.current = true;
-    void generate(demoTemplates[0], demoDesigns[0].publicPath);
-  }, [demoReady, generate]);
+    void generate(
+      demoTemplates[0],
+      demoDesigns[0].publicPath,
+      selectedColor.hex,
+    );
+  }, [demoReady, generate, selectedColor.hex]);
 
   useEffect(() => {
     return () => {
@@ -114,7 +133,7 @@ export function DemoExperience({
     setSelectedDesign(design);
     setDesignPreviewUrl(design.previewSrc);
     setDesignPublicUrl(design.publicPath);
-    void generate(selectedTemplate, design.publicPath);
+    void generate(selectedTemplate, design.publicPath, selectedColor.hex);
   };
 
   const handleFileSelect = async (file: File) => {
@@ -147,7 +166,7 @@ export function DemoExperience({
 
       if (uploadRes.ok && uploadData.url) {
         setDesignPublicUrl(uploadData.url);
-        await generate(selectedTemplate, uploadData.url);
+        await generate(selectedTemplate, uploadData.url, selectedColor.hex);
         return;
       }
 
@@ -160,7 +179,7 @@ export function DemoExperience({
       });
 
       setDesignPublicUrl(dataUrl);
-      await generate(selectedTemplate, dataUrl);
+      await generate(selectedTemplate, dataUrl, selectedColor.hex);
     } catch {
       setError("Failed to process the uploaded file.");
     } finally {
@@ -170,8 +189,20 @@ export function DemoExperience({
 
   const handleTemplateSelect = (template: DemoTemplate) => {
     setSelectedTemplate(template);
-    void generate(template, designPublicUrl);
+    const isTintable = TINTABLE_PRODUCT_TYPES.includes(template.type);
+    const colorHex = isTintable ? selectedColor.hex : CORE_COLORS[0].hex;
+    if (!isTintable) {
+      setSelectedColor(CORE_COLORS[0]);
+    }
+    void generate(template, designPublicUrl, colorHex);
   };
+
+  const handleColorSelect = (color: MockupColor) => {
+    setSelectedColor(color);
+    void generate(selectedTemplate, designPublicUrl, color.hex);
+  };
+
+  const isTintable = TINTABLE_PRODUCT_TYPES.includes(selectedTemplate.type);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
@@ -189,6 +220,14 @@ export function DemoExperience({
           selectedTemplateId={selectedTemplate.id}
           onSelect={handleTemplateSelect}
         />
+        {isTintable && (
+          <ColorStrip
+            colors={CORE_COLORS}
+            selectedId={selectedColor.id}
+            onSelect={handleColorSelect}
+            disabled={isGenerating}
+          />
+        )}
       </div>
       <MockupResult
         result={result}

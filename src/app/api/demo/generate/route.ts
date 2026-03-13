@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
     design_url: string;
     template_id: string;
     placement: { scale: number; offset_x: number; offset_y: number };
+    options?: { tint_color?: string };
   };
 
   const publicSiteUrl = getPublicSiteUrl(request.nextUrl.origin);
@@ -68,18 +69,21 @@ export async function POST(request: NextRequest) {
     ? `${publicSiteUrl}${body.design_url}`
     : body.design_url;
 
-  const response = await fetch(`${getMeetMockupApiUrl()}/api/v1/mockups/generate`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-Key": process.env.MEETMOCKUP_API_KEY ?? "",
+  const response = await fetch(
+    `${getMeetMockupApiUrl()}/api/v1/mockups/generate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": process.env.MEETMOCKUP_API_KEY ?? "",
+      },
+      body: JSON.stringify({
+        ...body,
+        design_url: resolvedDesignUrl,
+      }),
+      cache: "no-store",
     },
-    body: JSON.stringify({
-      ...body,
-      design_url: resolvedDesignUrl,
-    }),
-    cache: "no-store",
-  });
+  );
 
   let payload: unknown;
   try {
