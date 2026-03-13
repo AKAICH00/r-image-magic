@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "description": "Launch-safe default template map for MeetMockup API. Use these as first-choice templates per product type.",
+  "store_defaults": {
+    "t-shirt": "white_male_front",
+    "tshirt-aop": "tshirt-aop-front-3921",
+    "hoodie-aop": "hoodie-aop-front-47694",
+    "mug": "mug-front-919",
+    "mug-15oz": "mug-15oz-front-91020",
+    "tote": "tote-front-1204",
+    "pillow": "pillow-front-22667",
+    "phone-case": "phone-case-front-146439",
+    "poster": "poster-front-21372",
+    "tank-aop": "tank-aop-front-4245",
+    "wrapping-paper": "wrapping-paper-front-196986"
+  },
+  "alternate_templates": {
+    "t-shirt": [
+      "white_male_front_9x16",
+      "white_female_front_9x16"
+    ],
+    "tshirt-aop": [
+      "tshirt-aop-front-3920",
+      "tshirt-aop-front-3922",
+      "tshirt-aop-front-3923"
+    ],
+    "hoodie-aop": [
+      "hoodie-aop-front-132947",
+      "hoodie-aop-front-132961",
+      "hoodie-aop-front-132975",
+      "hoodie-aop-front-132989",
+      "hoodie-aop-front-86945"
+    ],
+    "mug": [
+      "mug-front-920",
+      "mug-front-181779"
+    ],
+    "mug-15oz": [
+      "mug-15oz-front-91022"
+    ],
+    "tote": [
+      "tote-front-3974",
+      "tote-front-3975"
+    ],
+    "pillow": [
+      "pillow-front-22665",
+      "pillow-front-22668",
+      "pillow-front-22669",
+      "pillow-front-22670"
+    ],
+    "phone-case": [
+      "phone-case-front-146440",
+      "phone-case-front-146444",
+      "phone-case-front-146445",
+      "phone-case-front-146446"
+    ],
+    "poster": [
+      "poster-front-21373",
+      "poster-front-21384",
+      "poster-front-354189",
+      "poster-front-354191"
+    ],
+    "tank-aop": [
+      "tank-aop-front-4248"
+    ],
+    "wrapping-paper": [
+      "wrapping-paper-front-196990",
+      "wrapping-paper-front-196992"
+    ]
+  },
+  "notes": {
+    "t-shirt": "Standard tee displacement templates for centered graphic/store mockups.",
+    "tshirt-aop": "All-over-print tee templates for seamless pattern products.",
+    "social_vertical": [
+      "white_male_front_9x16",
+      "white_female_front_9x16"
+    ]
+  }
+}

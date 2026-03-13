@@ -24,7 +24,10 @@
   "displacement": {
     "enabled": true,
     "strength_default": 6.0,
-    "strength_range": [3.0, 12.0]
+    "strength_range": [
+      3.0,
+      12.0
+    ]
   },
   "blend_mode": "multiply",
   "default_opacity": 255,
@@ -50,5 +53,9 @@
       "width": 360,
       "height": 360
     }
-  }
+  },
+  "name": "Standard T-Shirt (Male Front 9x16)",
+  "product_type": "t-shirt",
+  "template_role": "social-vertical",
+  "output_type": "store-mockup"
 }

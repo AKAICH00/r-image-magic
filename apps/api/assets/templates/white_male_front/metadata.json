@@ -24,7 +24,10 @@
   "displacement": {
     "enabled": true,
     "strength_default": 8.0,
-    "strength_range": [3.0, 15.0]
+    "strength_range": [
+      3.0,
+      15.0
+    ]
   },
   "blend_mode": "multiply",
   "default_opacity": 255,
@@ -50,5 +53,9 @@
       "width": 800,
       "height": 800
     }
-  }
+  },
+  "name": "Standard T-Shirt (Male Front)",
+  "product_type": "t-shirt",
+  "template_role": "store-default",
+  "output_type": "store-mockup"
 }

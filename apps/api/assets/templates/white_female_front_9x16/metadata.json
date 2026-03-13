@@ -53,5 +53,9 @@
       "width": 360,
       "height": 360
     }
-  }
+  },
+  "name": "Standard T-Shirt (Female Front 9x16)",
+  "product_type": "t-shirt",
+  "template_role": "social-vertical",
+  "output_type": "store-mockup"
 }
