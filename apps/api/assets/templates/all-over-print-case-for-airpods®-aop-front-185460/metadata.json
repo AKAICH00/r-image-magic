@@ -1,0 +1,44 @@
+{
+  "id": "all-over-print-case-for-airpods\u00ae-aop-front-185460",
+  "name": "All-Over Print Case for AirPods\u00ae (Front)",
+  "version": 1,
+  "category": "all-over-print-case-for-airpods\u00ae-aop",
+  "color": "white",
+  "color_hex": null,
+  "placement": "front",
+  "product": "All-Over Print Case for AirPods\u00ae",
+  "product_type": "all-over-print-case-for-airpods\u00ae-aop",
+  "printful_product_id": 681,
+  "printful_template_id": 185460,
+  "dimensions": {
+    "width": 728,
+    "height": 728.0
+  },
+  "print_area": {
+    "x": 145,
+    "y": 109,
+    "width": 438,
+    "height": 510.0
+  },
+  "anchor_point": {
+    "x": 364,
+    "y": 364.0
+  },
+  "displacement": {
+    "enabled": true,
+    "strength_default": 8.0,
+    "strength_range": [
+      4.0,
+      16.0
+    ]
+  },
+  "blend_mode": "multiply",
+  "default_opacity": 240,
+  "printfile": {
+    "id": 435,
+    "width": 1130,
+    "height": 1034,
+    "dpi": 300,
+    "fill_mode": "cover"
+  }
+}

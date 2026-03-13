@@ -1,0 +1,44 @@
+{
+  "id": "all-over-print-fanny-pack-aop-front-47548",
+  "name": "All-Over Print Fanny Pack (Front)",
+  "version": 1,
+  "category": "all-over-print-fanny-pack-aop",
+  "color": "white",
+  "color_hex": null,
+  "placement": "front",
+  "product": "All-Over Print Fanny Pack",
+  "product_type": "all-over-print-fanny-pack-aop",
+  "printful_product_id": 350,
+  "printful_template_id": 47548,
+  "dimensions": {
+    "width": 560,
+    "height": 560.0
+  },
+  "print_area": {
+    "x": 112,
+    "y": 84,
+    "width": 336,
+    "height": 392.0
+  },
+  "anchor_point": {
+    "x": 280,
+    "y": 280.0
+  },
+  "displacement": {
+    "enabled": true,
+    "strength_default": 8.0,
+    "strength_range": [
+      4.0,
+      16.0
+    ]
+  },
+  "blend_mode": "multiply",
+  "default_opacity": 240,
+  "printfile": {
+    "id": 64,
+    "width": 375,
+    "height": 150,
+    "dpi": 150,
+    "fill_mode": "fit"
+  }
+}
