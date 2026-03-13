@@ -1,8 +1,9 @@
-name: Build and Deploy r-image-magic
+name: "API: Build and Deploy to ECS"
 
 on:
   push:
     branches: [main]
+    paths: [apps/api/**]
   workflow_dispatch:
     inputs:
       environment:
@@ -82,7 +83,8 @@ jobs:
       - name: Build and push ARM64 image
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: apps/api
+          file: apps/api/Dockerfile
           platforms: linux/arm64
           push: true
           tags: |
@@ -185,7 +187,7 @@ jobs:
                 | map(select(.valueFrom != null and .valueFrom != "" and (.valueFrom | startswith("__") | not)))
               )
             ' \
-            ecs/task-definition.json)
+            apps/api/ecs/task-definition.json)
 
           NEW_REVISION=$(aws ecs register-task-definition \
             --cli-input-json "$NEW_TASK_DEF" \
@@ -201,4 +203,4 @@ jobs:
             --cluster "${{ env.ECS_CLUSTER }}" \
             --services "${{ env.ECS_SERVICE }}"
 
-          echo "✅ Deployed ${{ env.ECS_SERVICE }} → ${{ github.sha }}"
+          echo "Deployed ${{ env.ECS_SERVICE }} -> ${{ github.sha }}"
