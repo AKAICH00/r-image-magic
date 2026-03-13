@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { demoDesigns, demoTemplates, type DemoDesign, type DemoTemplate } from "@/lib/demo-data";
+import {
+  demoDesigns,
+  demoTemplates,
+  type DemoDesign,
+  type DemoTemplate,
+} from "@/lib/demo-data";
 import { DesignUploader } from "@/components/demo/design-uploader";
 import { MockupResult } from "@/components/demo/mockup-result";
 import { TemplateStrip } from "@/components/demo/template-strip";
@@ -22,10 +27,18 @@ export function DemoExperience({
   compact = false,
   demoReady = false,
 }: DemoExperienceProps) {
-  const [selectedDesign, setSelectedDesign] = useState<DemoDesign>(demoDesigns[0]);
-  const [selectedTemplate, setSelectedTemplate] = useState<DemoTemplate>(demoTemplates[0]);
-  const [designPreviewUrl, setDesignPreviewUrl] = useState(demoDesigns[0].previewSrc);
-  const [designPublicUrl, setDesignPublicUrl] = useState(demoDesigns[0].publicPath);
+  const [selectedDesign, setSelectedDesign] = useState<DemoDesign>(
+    demoDesigns[0],
+  );
+  const [selectedTemplate, setSelectedTemplate] = useState<DemoTemplate>(
+    demoTemplates[0],
+  );
+  const [designPreviewUrl, setDesignPreviewUrl] = useState(
+    demoDesigns[0].previewSrc,
+  );
+  const [designPublicUrl, setDesignPublicUrl] = useState(
+    demoDesigns[0].publicPath,
+  );
   const [result, setResult] = useState<DemoResultState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -122,25 +135,34 @@ export function DemoExperience({
     setError(null);
 
     try {
+      // Try R2 upload first — returns a public URL the API can fetch
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("/api/demo/upload", {
+      const uploadRes = await fetch("/api/demo/upload", {
         method: "POST",
         body: formData,
       });
-      const data = await response.json();
+      const uploadData = await uploadRes.json();
 
-      if (!response.ok) {
-        setError(data.error ?? "Upload failed.");
-        setIsUploading(false);
+      if (uploadRes.ok && uploadData.url) {
+        setDesignPublicUrl(uploadData.url);
+        await generate(selectedTemplate, uploadData.url);
         return;
       }
 
-      setDesignPublicUrl(data.path);
-      await generate(selectedTemplate, data.path);
+      // Fallback: convert to data URL if R2 is not configured
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      setDesignPublicUrl(dataUrl);
+      await generate(selectedTemplate, dataUrl);
     } catch {
-      setError("Upload failed.");
+      setError("Failed to process the uploaded file.");
     } finally {
       setIsUploading(false);
     }

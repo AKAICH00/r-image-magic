@@ -12,8 +12,8 @@ interface ComparisonPair {
 const pairs: ComparisonPair[] = [
   {
     label: "T-Shirt",
-    before: "/comparisons/tshirt-flat.png",
-    after: "/comparisons/tshirt-displaced.png",
+    before: "/comparisons/tshirt-flat.jpg",
+    after: "/comparisons/tshirt-displaced.jpg",
   },
   {
     label: "Hoodie",
@@ -144,7 +144,9 @@ export function BeforeAfter() {
           </div>
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-            <span>Same artwork. Same placement. Different level of realism.</span>
+            <span>
+              Same artwork. Same placement. Different level of realism.
+            </span>
             <span>Move the slider to compare every wrinkle and shadow.</span>
           </div>
         </div>
