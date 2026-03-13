@@ -301,7 +301,7 @@ impl AssetSyncer {
         asset: &MockupAsset,
     ) -> AssetPath {
         // Extract filename from URL
-        let filename = self.extract_filename(&asset.source_url);
+        let filename = Self::extract_filename(&asset.source_url);
 
         match asset.asset_type {
             AssetType::BaseImage => AssetPath::base_image(provider_code, product_id, &filename),
@@ -325,7 +325,7 @@ impl AssetSyncer {
     }
 
     /// Extract filename from URL
-    fn extract_filename(&self, url: &str) -> String {
+    fn extract_filename(url: &str) -> String {
         url.split('/')
             .last()
             .and_then(|s| s.split('?').next())
@@ -346,15 +346,20 @@ mod tests {
 
     #[test]
     fn test_extract_filename() {
-        let syncer = AssetSyncer {
-            r2_client: todo!("mock client"),
-            http_client: reqwest::Client::new(),
-            concurrency: 10,
-            skip_existing: true,
-        };
-
-        // This won't actually run due to todo!() but shows the intent
-        // assert_eq!(syncer.extract_filename("https://example.com/path/image.png"), "image.png");
-        // assert_eq!(syncer.extract_filename("https://example.com/path/image.png?token=abc"), "image.png");
+        assert_eq!(
+            AssetSyncer::extract_filename("https://example.com/path/image.png"),
+            "image.png"
+        );
+        assert_eq!(
+            AssetSyncer::extract_filename("https://example.com/path/image.png?token=abc"),
+            "image.png"
+        );
+        assert_eq!(
+            AssetSyncer::extract_filename("https://example.com/path/my file (1).png"),
+            "myfile1.png"
+        );
+        // Empty/missing filename falls back to UUID-based name
+        let fallback = AssetSyncer::extract_filename("https://example.com/");
+        assert!(fallback.ends_with(".png"));
     }
 }
