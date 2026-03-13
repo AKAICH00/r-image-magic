@@ -16,6 +16,7 @@ interface MockupResultProps {
   error: string | null;
   noticeMessage?: string | null;
   compact?: boolean;
+  tintHex?: string | null;
 }
 
 export function MockupResult({
@@ -24,6 +25,7 @@ export function MockupResult({
   error,
   noticeMessage,
   compact = false,
+  tintHex,
 }: MockupResultProps) {
   const frameClassName = compact ? "aspect-[4/3]" : "aspect-[4/5]";
   const previousUrlRef = useRef<string | null>(null);
@@ -96,6 +98,18 @@ export function MockupResult({
             />
             {isGenerating && (
               <div className="absolute inset-0 bg-black/8 transition-opacity duration-300" />
+            )}
+            {/* Optimistic color tint overlay */}
+            {tintHex && tintHex !== "FFFFFF" && (
+              <div
+                className="absolute inset-0 transition-opacity duration-200"
+                style={{
+                  backgroundColor: `#${tintHex}`,
+                  mixBlendMode: "multiply",
+                  opacity: isGenerating ? 1 : 0,
+                  pointerEvents: "none",
+                }}
+              />
             )}
             {result && !isGenerating && (
               <div className="absolute bottom-4 right-4 rounded-full bg-black/50 px-3 py-1 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-white/84 backdrop-blur">

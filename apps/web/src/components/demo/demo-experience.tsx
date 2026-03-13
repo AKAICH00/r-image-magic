@@ -235,6 +235,11 @@ export function DemoExperience({
         error={error}
         noticeMessage={!demoReady ? setupNotice : null}
         compact={compact}
+        tintHex={
+          TINTABLE_PRODUCT_TYPES.includes(selectedTemplate.type)
+            ? selectedColor.hex
+            : null
+        }
       />
     </div>
   );
