@@ -35,13 +35,13 @@ export function ColorStrip({
               disabled={disabled}
               onClick={() => onSelect(color)}
               aria-label={color.name}
-              className={`relative size-9 rounded-full transition-all ${
+              className={`relative size-9 rounded-full transition-all duration-150 ${
                 isWhite ? "border border-black/12" : ""
               } ${
                 isSelected
-                  ? "ring-2 ring-[#151b26] ring-offset-2"
-                  : "hover:ring-2 hover:ring-[#151b26]/30 hover:ring-offset-2"
-              } ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+                  ? "scale-110 ring-2 ring-[#151b26] ring-offset-2"
+                  : "hover:scale-110 hover:ring-2 hover:ring-[#151b26]/30 hover:ring-offset-2"
+              } ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer active:scale-95"}`}
               style={{ backgroundColor: `#${color.hex}` }}
             >
               {isSelected && (
