@@ -147,7 +147,7 @@ export function MockupResult({
             <a
               href={result.mockupUrl}
               download="meetmockup-preview.png"
-              className="inline-flex h-8 items-center justify-center rounded-lg border border-black/10 bg-white px-3 text-sm font-medium text-foreground transition hover:bg-muted"
+              className="inline-flex h-8 items-center justify-center rounded-lg border border-black/10 bg-white px-3 text-sm font-medium text-foreground transition hover:bg-muted animate-in slide-in-from-right-4 fade-in duration-300"
             >
               Download preview
             </a>
