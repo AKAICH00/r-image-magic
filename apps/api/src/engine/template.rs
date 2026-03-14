@@ -55,6 +55,9 @@ pub struct TemplateMetadata {
     pub printful_product_id: Option<u64>,
     #[serde(default)]
     pub printful_template_id: Option<u64>,
+    // Collar zone exclusion — restore original base pixels here after compositing
+    #[serde(default)]
+    pub collar_zone: Option<CollarZone>,
     // Zone definitions from working templates
     #[serde(default)]
     pub zones: Option<HashMap<String, serde_json::Value>>,
@@ -85,6 +88,15 @@ pub struct DisplacementConfig {
     pub enabled: bool,
     pub strength_default: f64,
     pub strength_range: (f64, f64),
+}
+
+/// Collar zone exclusion rectangle — preserves original blank pixels in this region
+#[derive(Debug, Clone, Deserialize)]
+pub struct CollarZone {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
 }
 
 /// A loaded template with all assets in memory

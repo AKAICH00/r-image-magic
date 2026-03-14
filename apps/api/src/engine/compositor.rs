@@ -155,7 +155,7 @@ impl Compositor {
             None => &template.base_image,
         };
 
-        let composited = self.composite_design(
+        let mut composited = self.composite_design(
             base_ref,
             &processed_design,
             abs_x,
@@ -164,7 +164,26 @@ impl Compositor {
             &template.metadata.blend_mode,
         );
 
-        // 5. Encode to PNG (preserves RGBA transparency)
+        // 5. Collar zone exclusion — restore original base pixels in the collar area
+        if let Some(ref cz) = template.metadata.collar_zone {
+            debug!(
+                x = cz.x, y = cz.y, w = cz.width, h = cz.height,
+                "Restoring collar zone from original base"
+            );
+            let base_rgba = base_ref.to_rgba8();
+            let mut comp_rgba = composited.to_rgba8();
+            let (bw, bh) = base_rgba.dimensions();
+            let x_end = (cz.x + cz.width).min(bw);
+            let y_end = (cz.y + cz.height).min(bh);
+            for y in cz.y..y_end {
+                for x in cz.x..x_end {
+                    comp_rgba.put_pixel(x, y, *base_rgba.get_pixel(x, y));
+                }
+            }
+            composited = DynamicImage::ImageRgba8(comp_rgba);
+        }
+
+        // 6. Encode to PNG (preserves RGBA transparency)
         let (width, height) = composited.dimensions();
         let png_bytes = self.encode_png(&composited)?;
 
