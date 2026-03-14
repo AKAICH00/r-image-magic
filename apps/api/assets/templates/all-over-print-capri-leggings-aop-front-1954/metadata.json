@@ -12,13 +12,13 @@
   "printful_template_id": 1954,
   "dimensions": {
     "width": 3000,
-    "height": 3000.0
+    "height": 3000
   },
   "print_area": {
     "x": 600,
     "y": 450,
     "width": 1800,
-    "height": 2100.0
+    "height": 2100
   },
   "anchor_point": {
     "x": 1500,
