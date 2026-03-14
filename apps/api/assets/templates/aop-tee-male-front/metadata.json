@@ -35,10 +35,23 @@
   "displacement": {
     "enabled": true,
     "strength_default": 8.0,
-    "strength_range": [4.0, 14.0]
+    "strength_range": [
+      4.0,
+      14.0
+    ]
   },
   "blend_mode": "multiply",
   "default_opacity": 240,
   "printful_product_id": 257,
-  "tags": ["aop", "tshirt", "male", "store-default"]
+  "tags": [
+    "aop",
+    "tshirt",
+    "male",
+    "store-default"
+  ],
+  "print_mask": "print-mask-front.png",
+  "preserve_masks": [
+    "preserve-mask-collar.png",
+    "preserve-mask-inner-neck.png"
+  ]
 }

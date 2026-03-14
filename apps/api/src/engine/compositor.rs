@@ -5,7 +5,7 @@
 
 use base64::Engine;
 use bytes::Bytes;
-use image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
+use image::{DynamicImage, GenericImageView, GrayImage, Luma, Rgba, RgbaImage};
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, info};
@@ -107,10 +107,23 @@ impl Compositor {
         let abs_x = rel_x + template.metadata.print_area.x as i32;
         let abs_y = rel_y + template.metadata.print_area.y as i32;
 
+        // Build an optional local print mask (same dimensions as design) from the full-canvas template mask.
+        // White/non-zero = printable pixel; zero = skip compositing.
+        let print_mask_region = template
+            .print_mask
+            .as_ref()
+            .map(|mask| Self::crop_mask_region(mask, abs_x, abs_y, design_width as u32, design_height as u32));
+
         // 3. Apply displacement mapping if available
         // Crop the displacement map to the exact region where the design lands,
         // so fabric wrinkles match the actual print position (not the whole shirt scaled down).
-        let processed_design = if let Some(ref disp_map) = template.displacement_map {
+        // If a print mask exists, displacement is only meaningful where the print mask is non-zero.
+        let mask_has_printable_pixels = print_mask_region
+            .as_ref()
+            .map_or(true, |m| Self::mask_has_nonzero(m));
+        let processed_design = if !mask_has_printable_pixels {
+            resized_design
+        } else if let Some(ref disp_map) = template.displacement_map {
             if template.metadata.displacement.enabled {
                 let (disp_w, disp_h) = disp_map.dimensions();
                 let crop_x = (abs_x.max(0) as u32).min(disp_w.saturating_sub(1));
@@ -162,13 +175,19 @@ impl Compositor {
             abs_y,
             template.metadata.default_opacity,
             &template.metadata.blend_mode,
+            print_mask_region.as_ref(),
         );
 
-        // 5. Collar zone exclusion — restore original base pixels in the collar area
-        if let Some(ref cz) = template.metadata.collar_zone {
+        // 5. Preserve zones — restore original base pixels where preserve masks are white/non-zero.
+        // If preserve masks are not configured, keep legacy collar_zone fallback behavior.
+        if !template.preserve_masks.is_empty() {
+            for preserve_mask in &template.preserve_masks {
+                composited = Self::restore_from_mask(base_ref, &composited, preserve_mask);
+            }
+        } else if let Some(ref cz) = template.metadata.collar_zone {
             debug!(
                 x = cz.x, y = cz.y, w = cz.width, h = cz.height,
-                "Restoring collar zone from original base"
+                "Restoring legacy collar zone from original base"
             );
             let base_rgba = base_ref.to_rgba8();
             let mut comp_rgba = composited.to_rgba8();
@@ -241,6 +260,7 @@ impl Compositor {
         y_offset: i32,
         opacity: u8,
         blend_mode: &str,
+        print_mask_region: Option<&GrayImage>,
     ) -> DynamicImage {
         let mut base_rgba = base.to_rgba8();
         let design_rgba = design.to_rgba8();
@@ -271,6 +291,13 @@ impl Compositor {
                     continue;
                 }
 
+                // Skip pixels outside print mask when provided
+                if let Some(mask) = print_mask_region {
+                    if mask.get_pixel(dx, dy).0[0] == 0 {
+                        continue;
+                    }
+                }
+
                 let blended = match blend_mode {
                     "multiply" => self.blend_multiply_pixel(base_pixel, design_pixel),
                     "screen" => self.blend_screen_pixel(base_pixel, design_pixel),
@@ -285,6 +312,55 @@ impl Compositor {
         DynamicImage::ImageRgba8(base_rgba)
     }
 
+
+    /// Crop full-canvas mask into design-local region aligned with placement offsets.
+    fn crop_mask_region(mask: &DynamicImage, x_offset: i32, y_offset: i32, width: u32, height: u32) -> GrayImage {
+        let src = mask.to_luma8();
+        let (mw, mh) = src.dimensions();
+        let mut out = GrayImage::from_pixel(width, height, Luma([0]));
+
+        for dy in 0..height {
+            let y = y_offset + dy as i32;
+            if y < 0 || y >= mh as i32 {
+                continue;
+            }
+            for dx in 0..width {
+                let x = x_offset + dx as i32;
+                if x < 0 || x >= mw as i32 {
+                    continue;
+                }
+                out.put_pixel(dx, dy, *src.get_pixel(x as u32, y as u32));
+            }
+        }
+
+        out
+    }
+
+    fn mask_has_nonzero(mask: &GrayImage) -> bool {
+        mask.pixels().any(|p| p.0[0] > 0)
+    }
+
+    /// Restore pixels from the original base image where a full-canvas preserve mask is non-zero.
+    fn restore_from_mask(base: &DynamicImage, composited: &DynamicImage, preserve_mask: &DynamicImage) -> DynamicImage {
+        let base_rgba = base.to_rgba8();
+        let mut comp_rgba = composited.to_rgba8();
+        let mask = preserve_mask.to_luma8();
+
+        let (bw, bh) = base_rgba.dimensions();
+        let (mw, mh) = mask.dimensions();
+        let w = bw.min(mw);
+        let h = bh.min(mh);
+
+        for y in 0..h {
+            for x in 0..w {
+                if mask.get_pixel(x, y).0[0] > 0 {
+                    comp_rgba.put_pixel(x, y, *base_rgba.get_pixel(x, y));
+                }
+            }
+        }
+
+        DynamicImage::ImageRgba8(comp_rgba)
+    }
     /// Normal alpha blending
     fn blend_normal_pixel(&self, base: &Rgba<u8>, overlay: &Rgba<u8>) -> Rgba<u8> {
         let alpha = overlay.0[3] as f64 / 255.0;
@@ -490,5 +566,33 @@ mod tests {
         let pixel = tinted.to_rgba8().get_pixel(0, 0).0;
         // 128 * 255 / 255 = 128, 128 * 0 / 255 = 0
         assert_eq!(pixel, [128, 0, 0, 255]);
+    }
+
+    #[test]
+    fn test_composite_design_respects_print_mask() {
+        let c = Compositor::new();
+        let base = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([255, 255, 255, 255])));
+        let design = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([255, 0, 0, 255])));
+        let mut mask = GrayImage::from_pixel(2, 1, Luma([0]));
+        mask.put_pixel(0, 0, Luma([255]));
+
+        let out = c.composite_design(&base, &design, 0, 0, 255, "normal", Some(&mask));
+        let px = out.to_rgba8();
+        assert_eq!(px.get_pixel(0, 0).0, [255, 0, 0, 255]);
+        assert_eq!(px.get_pixel(1, 0).0, [255, 255, 255, 255]);
+    }
+
+    #[test]
+    fn test_restore_from_mask_preserves_base_pixels() {
+        let base = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([10, 20, 30, 255])));
+        let composited = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([200, 100, 50, 255])));
+        let mut preserve = RgbaImage::from_pixel(2, 1, Rgba([0, 0, 0, 255]));
+        preserve.put_pixel(1, 0, Rgba([255, 255, 255, 255]));
+        let preserve = DynamicImage::ImageRgba8(preserve);
+
+        let out = Compositor::restore_from_mask(&base, &composited, &preserve);
+        let px = out.to_rgba8();
+        assert_eq!(px.get_pixel(0, 0).0, [200, 100, 50, 255]);
+        assert_eq!(px.get_pixel(1, 0).0, [10, 20, 30, 255]);
     }
 }

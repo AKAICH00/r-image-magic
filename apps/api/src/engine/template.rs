@@ -55,7 +55,12 @@ pub struct TemplateMetadata {
     pub printful_product_id: Option<u64>,
     #[serde(default)]
     pub printful_template_id: Option<u64>,
-    // Collar zone exclusion — restore original base pixels here after compositing
+    // Optional mask assets (relative to template directory) for mask-based compositing
+    #[serde(default)]
+    pub print_mask: Option<String>,
+    #[serde(default)]
+    pub preserve_masks: Vec<String>,
+    // Collar zone exclusion — restore original base pixels here after compositing (legacy fallback)
     #[serde(default)]
     pub collar_zone: Option<CollarZone>,
     // Zone definitions from working templates
@@ -104,6 +109,8 @@ pub struct Template {
     pub metadata: TemplateMetadata,
     pub base_image: DynamicImage,
     pub displacement_map: Option<DynamicImage>,
+    pub print_mask: Option<DynamicImage>,
+    pub preserve_masks: Vec<DynamicImage>,
 }
 
 impl Template {
@@ -142,10 +149,39 @@ impl Template {
             }
         };
 
+        // Load optional print mask (full-canvas mask image)
+        let print_mask = if let Some(mask_file) = metadata.print_mask.as_ref() {
+            let mask_path = path.join(mask_file);
+            if !mask_path.exists() {
+                return Err(TemplateError::MetadataLoad(format!(
+                    "print_mask file not found: {}",
+                    mask_path.display()
+                )));
+            }
+            Some(image::open(&mask_path)?)
+        } else {
+            None
+        };
+
+        // Load optional preserve masks (full-canvas mask image list)
+        let mut preserve_masks = Vec::new();
+        for mask_file in &metadata.preserve_masks {
+            let mask_path = path.join(mask_file);
+            if !mask_path.exists() {
+                return Err(TemplateError::MetadataLoad(format!(
+                    "preserve_mask file not found: {}",
+                    mask_path.display()
+                )));
+            }
+            preserve_masks.push(image::open(&mask_path)?);
+        }
+
         info!(
             id = %metadata.id,
             dimensions = ?metadata.dimensions,
             has_displacement = displacement_map.is_some(),
+            has_print_mask = print_mask.is_some(),
+            preserve_mask_count = preserve_masks.len(),
             "Loaded template"
         );
 
@@ -153,6 +189,8 @@ impl Template {
             metadata,
             base_image,
             displacement_map,
+            print_mask,
+            preserve_masks,
         })
     }
 }
