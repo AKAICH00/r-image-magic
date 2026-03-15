@@ -6,6 +6,7 @@ use std::time::Instant;
 use tracing::{error, info};
 use utoipa::ToSchema;
 
+use crate::aop::{AopRenderConfig, DebugOverlayArtifact, PrintMode, ValidationIssue};
 use crate::domain::PlacementSpec;
 use crate::engine::MockupRequest;
 use crate::AppState;
@@ -18,6 +19,7 @@ pub struct GenerateRequest {
     /// Template ID (e.g., "white_male_front")
     pub template_id: String,
     /// Placement specification
+    #[serde(default)]
     pub placement: PlacementSpec,
     /// Optional generation options
     #[serde(default)]
@@ -32,6 +34,11 @@ pub struct GenerateOptions {
     pub displacement_strength: f64,
     /// Hex color to tint the product template (e.g. "0D0D0D" for black)
     pub tint_color: Option<String>,
+    /// Print mode. StandardLogo preserves the current workflow.
+    #[serde(default)]
+    pub print_mode: PrintMode,
+    /// Optional seam-aware AOP render config.
+    pub aop: Option<AopRenderConfig>,
 }
 
 fn default_displacement() -> f64 {
@@ -52,6 +59,10 @@ pub struct GenerateMetadata {
     pub generation_time_ms: u64,
     pub template_used: String,
     pub dimensions: Dimensions,
+    pub print_mode: PrintMode,
+    pub architecture_summary: Option<String>,
+    pub validation_issues: Vec<ValidationIssue>,
+    pub qa_overlays: Vec<DebugOverlayArtifact>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -118,16 +129,18 @@ pub async fn generate_mockup(
     placement.print_area_width = template.metadata.print_area.width as i32;
     placement.print_area_height = template.metadata.print_area.height as i32;
 
-    // Validate placement with correct dimensions
-    if let Err(e) = placement.validate() {
-        error!(error = %e, "Invalid placement specification");
-        return HttpResponse::BadRequest().json(ErrorResponse {
-            success: false,
-            error: ApiError {
-                code: "INVALID_PLACEMENT".to_string(),
-                message: e.to_string(),
-            },
-        });
+    // Validate placement only for the StandardLogo workflow. AOP rendering owns its own panel mapping.
+    if body.options.print_mode == PrintMode::StandardLogo {
+        if let Err(e) = placement.validate() {
+            error!(error = %e, "Invalid placement specification");
+            return HttpResponse::BadRequest().json(ErrorResponse {
+                success: false,
+                error: ApiError {
+                    code: "INVALID_PLACEMENT".to_string(),
+                    message: e.to_string(),
+                },
+            });
+        }
     }
 
     // Create mockup request with adjusted placement
@@ -137,6 +150,8 @@ pub async fn generate_mockup(
         placement,
         displacement_strength: body.options.displacement_strength,
         tint_color: body.options.tint_color.clone(),
+        print_mode: body.options.print_mode,
+        aop: body.options.aop.clone(),
     };
 
     // Generate mockup (this is the heavy lifting)
@@ -160,6 +175,10 @@ pub async fn generate_mockup(
                         width: result.width,
                         height: result.height,
                     },
+                    print_mode: result.print_mode,
+                    architecture_summary: result.architecture_summary,
+                    validation_issues: result.validation_issues,
+                    qa_overlays: result.qa_overlays,
                 },
             })
         }

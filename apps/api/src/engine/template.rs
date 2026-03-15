@@ -9,6 +9,8 @@ use std::sync::Arc;
 use thiserror::Error;
 use tracing::{info, warn};
 
+use crate::aop::AopTemplateMetadata;
+
 use super::compositor::{Compositor, MockupRequest, MockupResult};
 
 /// Template-related errors
@@ -63,6 +65,8 @@ pub struct TemplateMetadata {
     // Collar zone exclusion — restore original base pixels here after compositing (legacy fallback)
     #[serde(default)]
     pub collar_zone: Option<CollarZone>,
+    #[serde(default)]
+    pub aop: Option<AopTemplateMetadata>,
     // Zone definitions from working templates
     #[serde(default)]
     pub zones: Option<HashMap<String, serde_json::Value>>,
@@ -106,6 +110,7 @@ pub struct CollarZone {
 
 /// A loaded template with all assets in memory
 pub struct Template {
+    pub root_path: PathBuf,
     pub metadata: TemplateMetadata,
     pub base_image: DynamicImage,
     pub displacement_map: Option<DynamicImage>,
@@ -186,6 +191,7 @@ impl Template {
         );
 
         Ok(Template {
+            root_path: path.to_path_buf(),
             metadata,
             base_image,
             displacement_map,

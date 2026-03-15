@@ -9,11 +9,14 @@ use std::sync::Arc;
 use tracing::info;
 use tracing_actix_web::TracingLogger;
 
+mod aop;
 mod api;
 mod config;
 mod db;
 mod domain;
 mod engine;
+mod imageops;
+mod presets;
 mod providers;
 mod storage;
 mod sync;

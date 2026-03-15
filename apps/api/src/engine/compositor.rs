@@ -12,6 +12,9 @@ use tracing::{debug, info};
 
 use super::displacement::{apply_displacement, apply_opacity};
 use super::template::Template;
+use crate::aop::{
+    AopRenderConfig, AopRenderError, AopRenderer, DebugOverlayArtifact, PrintMode, ValidationIssue,
+};
 use crate::config::service_user_agent;
 use crate::domain::PlacementSpec;
 
@@ -24,6 +27,8 @@ pub enum CompositorError {
     DecodeFailed(#[from] image::ImageError),
     #[error("HTTP error: {0}")]
     HttpError(#[from] reqwest::Error),
+    #[error("AOP error: {0}")]
+    Aop(#[from] AopRenderError),
 }
 
 /// Request for mockup generation
@@ -34,6 +39,8 @@ pub struct MockupRequest {
     pub placement: PlacementSpec,
     pub displacement_strength: f64,
     pub tint_color: Option<String>,
+    pub print_mode: PrintMode,
+    pub aop: Option<AopRenderConfig>,
 }
 
 /// Result of mockup generation
@@ -42,6 +49,10 @@ pub struct MockupResult {
     pub width: u32,
     pub height: u32,
     pub bytes: Bytes,
+    pub validation_issues: Vec<ValidationIssue>,
+    pub qa_overlays: Vec<DebugOverlayArtifact>,
+    pub print_mode: PrintMode,
+    pub architecture_summary: Option<String>,
 }
 
 /// Parse a hex color string (with or without leading '#') into (r, g, b)
@@ -59,6 +70,7 @@ fn parse_hex_color(hex: &str) -> Option<(u8, u8, u8)> {
 /// Image compositor for generating mockups
 pub struct Compositor {
     http_client: reqwest::Client,
+    aop_renderer: AopRenderer,
 }
 
 impl Compositor {
@@ -70,7 +82,10 @@ impl Compositor {
             .build()
             .expect("Failed to create HTTP client");
 
-        Compositor { http_client }
+        Compositor {
+            http_client,
+            aop_renderer: AopRenderer::new(),
+        }
     }
 
     /// Generate a mockup from a request and template
@@ -88,6 +103,14 @@ impl Compositor {
 
         // 1. Fetch design image
         let design = self.fetch_design(&request.design_url).await?;
+
+        if request.print_mode != PrintMode::StandardLogo {
+            return self
+                .aop_renderer
+                .render(&self.http_client, request, template.as_ref(), &design)
+                .await
+                .map_err(CompositorError::from);
+        }
 
         // NOTE: White background removal is intentionally skipped for seamless/AOP patterns.
         // Patterns fill the entire print area — removing white would punch holes in the design.
@@ -109,10 +132,15 @@ impl Compositor {
 
         // Build an optional local print mask (same dimensions as design) from the full-canvas template mask.
         // White/non-zero = printable pixel; zero = skip compositing.
-        let print_mask_region = template
-            .print_mask
-            .as_ref()
-            .map(|mask| Self::crop_mask_region(mask, abs_x, abs_y, design_width as u32, design_height as u32));
+        let print_mask_region = template.print_mask.as_ref().map(|mask| {
+            Self::crop_mask_region(
+                mask,
+                abs_x,
+                abs_y,
+                design_width as u32,
+                design_height as u32,
+            )
+        });
 
         // 3. Apply displacement mapping if available
         // Crop the displacement map to the exact region where the design lands,
@@ -186,7 +214,10 @@ impl Compositor {
             }
         } else if let Some(ref cz) = template.metadata.collar_zone {
             debug!(
-                x = cz.x, y = cz.y, w = cz.width, h = cz.height,
+                x = cz.x,
+                y = cz.y,
+                w = cz.width,
+                h = cz.height,
                 "Restoring legacy collar zone from original base"
             );
             let base_rgba = base_ref.to_rgba8();
@@ -222,6 +253,13 @@ impl Compositor {
             width,
             height,
             bytes: Bytes::from(png_bytes),
+            validation_issues: Vec::new(),
+            qa_overlays: Vec::new(),
+            print_mode: PrintMode::StandardLogo,
+            architecture_summary: Some(
+                "StandardLogo uses the legacy centered-placement displacement compositor."
+                    .to_string(),
+            ),
         })
     }
 
@@ -312,9 +350,14 @@ impl Compositor {
         DynamicImage::ImageRgba8(base_rgba)
     }
 
-
     /// Crop full-canvas mask into design-local region aligned with placement offsets.
-    fn crop_mask_region(mask: &DynamicImage, x_offset: i32, y_offset: i32, width: u32, height: u32) -> GrayImage {
+    fn crop_mask_region(
+        mask: &DynamicImage,
+        x_offset: i32,
+        y_offset: i32,
+        width: u32,
+        height: u32,
+    ) -> GrayImage {
         let src = mask.to_luma8();
         let (mw, mh) = src.dimensions();
         let mut out = GrayImage::from_pixel(width, height, Luma([0]));
@@ -341,7 +384,11 @@ impl Compositor {
     }
 
     /// Restore pixels from the original base image where a full-canvas preserve mask is non-zero.
-    fn restore_from_mask(base: &DynamicImage, composited: &DynamicImage, preserve_mask: &DynamicImage) -> DynamicImage {
+    fn restore_from_mask(
+        base: &DynamicImage,
+        composited: &DynamicImage,
+        preserve_mask: &DynamicImage,
+    ) -> DynamicImage {
         let base_rgba = base.to_rgba8();
         let mut comp_rgba = composited.to_rgba8();
         let mask = preserve_mask.to_luma8();
@@ -571,7 +618,8 @@ mod tests {
     #[test]
     fn test_composite_design_respects_print_mask() {
         let c = Compositor::new();
-        let base = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([255, 255, 255, 255])));
+        let base =
+            DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([255, 255, 255, 255])));
         let design = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([255, 0, 0, 255])));
         let mut mask = GrayImage::from_pixel(2, 1, Luma([0]));
         mask.put_pixel(0, 0, Luma([255]));
@@ -585,7 +633,8 @@ mod tests {
     #[test]
     fn test_restore_from_mask_preserves_base_pixels() {
         let base = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([10, 20, 30, 255])));
-        let composited = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([200, 100, 50, 255])));
+        let composited =
+            DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([200, 100, 50, 255])));
         let mut preserve = RgbaImage::from_pixel(2, 1, Rgba([0, 0, 0, 255]));
         preserve.put_pixel(1, 0, Rgba([255, 255, 255, 255]));
         let preserve = DynamicImage::ImageRgba8(preserve);
