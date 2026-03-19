@@ -6,7 +6,7 @@
 use base64::Engine;
 use bytes::Bytes;
 use image::{DynamicImage, GenericImageView, GrayImage, Luma, Rgba, RgbaImage};
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 use thiserror::Error;
 use tracing::{debug, info};
 
@@ -430,6 +430,7 @@ impl Compositor {
     fn tint_template(base: &DynamicImage, r: u8, g: u8, b: u8) -> DynamicImage {
         let rgba = base.to_rgba8();
         let (width, height) = rgba.dimensions();
+        let tint_mask = Self::derive_tint_mask(&rgba);
         let mut output = RgbaImage::new(width, height);
 
         for y in 0..height {
@@ -439,14 +440,282 @@ impl Compositor {
                     output.put_pixel(x, y, *pixel);
                     continue;
                 }
+                let mask_alpha = tint_mask
+                    .as_ref()
+                    .map(|mask| mask.get_pixel(x, y).0[0] as f32 / 255.0)
+                    .unwrap_or(1.0);
+                if mask_alpha <= 0.0 {
+                    output.put_pixel(x, y, *pixel);
+                    continue;
+                }
                 let tinted_r = (pixel.0[0] as u16 * r as u16 / 255) as u8;
                 let tinted_g = (pixel.0[1] as u16 * g as u16 / 255) as u8;
                 let tinted_b = (pixel.0[2] as u16 * b as u16 / 255) as u8;
-                output.put_pixel(x, y, Rgba([tinted_r, tinted_g, tinted_b, pixel.0[3]]));
+
+                let blend_channel = |base_channel: u8, tinted_channel: u8| {
+                    (tinted_channel as f32 * mask_alpha + base_channel as f32 * (1.0 - mask_alpha))
+                        .round()
+                        .clamp(0.0, 255.0) as u8
+                };
+
+                output.put_pixel(
+                    x,
+                    y,
+                    Rgba([
+                        blend_channel(pixel.0[0], tinted_r),
+                        blend_channel(pixel.0[1], tinted_g),
+                        blend_channel(pixel.0[2], tinted_b),
+                        pixel.0[3],
+                    ]),
+                );
             }
         }
 
         DynamicImage::ImageRgba8(output)
+    }
+
+    fn derive_tint_mask(base: &RgbaImage) -> Option<GrayImage> {
+        const BACKGROUND_THRESHOLD: u8 = 18;
+        const MAX_BACKGROUND_VARIANCE: u8 = 22;
+        const MIN_FOREGROUND_RATIO: f32 = 0.02;
+        const MAX_FOREGROUND_RATIO: f32 = 0.98;
+
+        let (width, height) = base.dimensions();
+        if width == 0 || height == 0 {
+            return None;
+        }
+
+        if Self::has_transparent_border(base) {
+            let mut mask = GrayImage::new(width, height);
+            let mut foreground_pixels = 0u64;
+            for y in 0..height {
+                for x in 0..width {
+                    let alpha = base.get_pixel(x, y).0[3];
+                    mask.put_pixel(x, y, Luma([alpha]));
+                    if alpha > 0 {
+                        foreground_pixels += 1;
+                    }
+                }
+            }
+
+            let foreground_ratio = foreground_pixels as f32 / (width * height) as f32;
+            if !(MIN_FOREGROUND_RATIO..=MAX_FOREGROUND_RATIO).contains(&foreground_ratio) {
+                return None;
+            }
+
+            return Some(mask);
+        }
+
+        let mut sums = [0u64; 3];
+        let mut sample_count = 0u64;
+        let mut sample_border = |x: u32, y: u32| {
+            let pixel = base.get_pixel(x, y);
+            sums[0] += pixel.0[0] as u64;
+            sums[1] += pixel.0[1] as u64;
+            sums[2] += pixel.0[2] as u64;
+            sample_count += 1;
+        };
+
+        for x in 0..width {
+            sample_border(x, 0);
+            if height > 1 {
+                sample_border(x, height - 1);
+            }
+        }
+        for y in 1..height.saturating_sub(1) {
+            sample_border(0, y);
+            if width > 1 {
+                sample_border(width - 1, y);
+            }
+        }
+
+        if sample_count == 0 {
+            return None;
+        }
+
+        let background = [
+            (sums[0] / sample_count) as u8,
+            (sums[1] / sample_count) as u8,
+            (sums[2] / sample_count) as u8,
+        ];
+
+        let mut background_mask = vec![false; (width * height) as usize];
+        let mut queue = VecDeque::new();
+
+        let mut try_seed = |x: u32, y: u32, queue: &mut VecDeque<(u32, u32)>| {
+            let idx = (y * width + x) as usize;
+            if background_mask[idx] {
+                return;
+            }
+            if Self::is_background_pixel(
+                base.get_pixel(x, y),
+                background,
+                BACKGROUND_THRESHOLD,
+                MAX_BACKGROUND_VARIANCE,
+            ) {
+                background_mask[idx] = true;
+                queue.push_back((x, y));
+            }
+        };
+
+        for x in 0..width {
+            try_seed(x, 0, &mut queue);
+            if height > 1 {
+                try_seed(x, height - 1, &mut queue);
+            }
+        }
+        for y in 1..height.saturating_sub(1) {
+            try_seed(0, y, &mut queue);
+            if width > 1 {
+                try_seed(width - 1, y, &mut queue);
+            }
+        }
+
+        while let Some((x, y)) = queue.pop_front() {
+            let neighbors = [
+                (x.checked_sub(1), Some(y)),
+                (x.checked_add(1).filter(|nx| *nx < width), Some(y)),
+                (Some(x), y.checked_sub(1)),
+                (Some(x), y.checked_add(1).filter(|ny| *ny < height)),
+            ];
+
+            for (nx, ny) in neighbors {
+                let (Some(nx), Some(ny)) = (nx, ny) else {
+                    continue;
+                };
+                let idx = (ny * width + nx) as usize;
+                if background_mask[idx] {
+                    continue;
+                }
+                if Self::is_background_pixel(
+                    base.get_pixel(nx, ny),
+                    background,
+                    BACKGROUND_THRESHOLD,
+                    MAX_BACKGROUND_VARIANCE,
+                ) {
+                    background_mask[idx] = true;
+                    queue.push_back((nx, ny));
+                }
+            }
+        }
+
+        let mut hard_mask = GrayImage::new(width, height);
+        let mut foreground_pixels = 0u64;
+        for y in 0..height {
+            for x in 0..width {
+                let idx = (y * width + x) as usize;
+                if !background_mask[idx] {
+                    hard_mask.put_pixel(x, y, Luma([255]));
+                    foreground_pixels += 1;
+                }
+            }
+        }
+
+        let foreground_ratio = foreground_pixels as f32 / (width * height) as f32;
+        if foreground_pixels == 0
+            || !(MIN_FOREGROUND_RATIO..=MAX_FOREGROUND_RATIO).contains(&foreground_ratio)
+        {
+            return None;
+        }
+
+        let softened_mask = Self::dilate_mask(&hard_mask, 1);
+        let min_dimension = width.min(height);
+
+        if min_dimension < 64 {
+            return Some(softened_mask);
+        }
+
+        let blur_sigma = (min_dimension as f32 / 512.0).clamp(0.75, 2.0);
+        Some(DynamicImage::ImageLuma8(softened_mask).blur(blur_sigma).to_luma8())
+    }
+
+    fn has_transparent_border(base: &RgbaImage) -> bool {
+        const TRANSPARENT_ALPHA_THRESHOLD: u8 = 16;
+        const MIN_TRANSPARENT_BORDER_RATIO: f32 = 0.05;
+
+        let (width, height) = base.dimensions();
+        if width == 0 || height == 0 {
+            return false;
+        }
+
+        let mut transparent_border_pixels = 0u64;
+        let mut border_pixels = 0u64;
+        let mut sample_border = |x: u32, y: u32| {
+            border_pixels += 1;
+            if base.get_pixel(x, y).0[3] < TRANSPARENT_ALPHA_THRESHOLD {
+                transparent_border_pixels += 1;
+            }
+        };
+
+        for x in 0..width {
+            sample_border(x, 0);
+            if height > 1 {
+                sample_border(x, height - 1);
+            }
+        }
+        for y in 1..height.saturating_sub(1) {
+            sample_border(0, y);
+            if width > 1 {
+                sample_border(width - 1, y);
+            }
+        }
+
+        border_pixels > 0
+            && (transparent_border_pixels as f32 / border_pixels as f32)
+                >= MIN_TRANSPARENT_BORDER_RATIO
+    }
+
+    fn is_background_pixel(
+        pixel: &Rgba<u8>,
+        background: [u8; 3],
+        threshold: u8,
+        max_variance: u8,
+    ) -> bool {
+        if pixel.0[3] < 16 {
+            return true;
+        }
+
+        let max_delta = pixel.0[0]
+            .abs_diff(background[0])
+            .max(pixel.0[1].abs_diff(background[1]))
+            .max(pixel.0[2].abs_diff(background[2]));
+        let variance = pixel.0[0]
+            .max(pixel.0[1])
+            .max(pixel.0[2])
+            .saturating_sub(pixel.0[0].min(pixel.0[1]).min(pixel.0[2]));
+
+        max_delta <= threshold && variance <= max_variance
+    }
+
+    fn dilate_mask(mask: &GrayImage, radius: u32) -> GrayImage {
+        let (width, height) = mask.dimensions();
+        let mut output = GrayImage::new(width, height);
+
+        for y in 0..height {
+            for x in 0..width {
+                let x_start = x.saturating_sub(radius);
+                let y_start = y.saturating_sub(radius);
+                let x_end = x.saturating_add(radius).min(width.saturating_sub(1));
+                let y_end = y.saturating_add(radius).min(height.saturating_sub(1));
+
+                let mut max_value = 0u8;
+                for yy in y_start..=y_end {
+                    for xx in x_start..=x_end {
+                        max_value = max_value.max(mask.get_pixel(xx, yy).0[0]);
+                        if max_value == 255 {
+                            break;
+                        }
+                    }
+                    if max_value == 255 {
+                        break;
+                    }
+                }
+
+                output.put_pixel(x, y, Luma([max_value]));
+            }
+        }
+
+        output
     }
 
     /// Encode image to PNG bytes (preserves RGBA transparency)
@@ -566,6 +835,40 @@ mod tests {
         let pixel = tinted.to_rgba8().get_pixel(0, 0).0;
         // 128 * 255 / 255 = 128, 128 * 0 / 255 = 0
         assert_eq!(pixel, [128, 0, 0, 255]);
+    }
+
+    #[test]
+    fn test_tint_respects_derived_foreground_mask() {
+        let mut img = RgbaImage::from_pixel(6, 6, Rgba([250, 250, 250, 255]));
+        for y in 2..4 {
+            for x in 2..4 {
+                img.put_pixel(x, y, Rgba([220, 220, 220, 255]));
+            }
+        }
+
+        let tinted = Compositor::tint_template(&DynamicImage::ImageRgba8(img), 255, 0, 0);
+        let rgba = tinted.to_rgba8();
+
+        assert_eq!(rgba.get_pixel(0, 0).0, [250, 250, 250, 255]);
+        assert_eq!(rgba.get_pixel(3, 3).0, [220, 0, 0, 255]);
+    }
+
+    #[test]
+    fn test_tint_real_hoodie_template_preserves_background() {
+        let base_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("assets/templates/hoodie-aop-front-132947/base.png");
+        let base = image::open(base_path).expect("hoodie template base should load");
+
+        let tinted = Compositor::tint_template(&base, 220, 20, 60);
+        let rgba = tinted.to_rgba8();
+
+        assert_eq!(rgba.get_pixel(0, 0).0, [255, 255, 255, 255]);
+
+        let garment_pixel = rgba.get_pixel(500, 500).0;
+        assert!(garment_pixel[0] > garment_pixel[1]);
+        assert!(garment_pixel[0] > garment_pixel[2]);
+        assert!(garment_pixel[1] < 40);
+        assert!(garment_pixel[2] < 80);
     }
 
     #[test]
