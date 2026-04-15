@@ -38,7 +38,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json(
+      { error: "Upload request must be multipart form data." },
+      { status: 400 },
+    );
+  }
+
   const file = formData.get("file");
 
   if (!(file instanceof File)) {
@@ -69,14 +78,21 @@ export async function POST(request: Request) {
   const key = `demo-uploads/${randomUUID()}.${extension}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  await client.send(
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      Body: buffer,
-      ContentType: file.type,
-    }),
-  );
+  try {
+    await client.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: file.type,
+      }),
+    );
+  } catch {
+    return NextResponse.json(
+      { error: "Upload storage is unavailable. Use a sample design instead." },
+      { status: 502 },
+    );
+  }
 
   const publicUrl = `${publicUrlPrefix.replace(/\/$/, "")}/${key}`;
 
