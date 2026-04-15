@@ -4,6 +4,7 @@ use actix_web::{web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tracing::{error, info};
+use url::Url;
 use utoipa::ToSchema;
 
 use crate::domain::PlacementSpec;
@@ -36,6 +37,43 @@ pub struct GenerateOptions {
 
 fn default_displacement() -> f64 {
     10.0
+}
+
+fn validate_design_url(design_url: &str) -> Result<(), String> {
+    let parsed = Url::parse(design_url).map_err(|_| "design_url must be an absolute URL")?;
+    match parsed.scheme() {
+        "http" | "https" => Ok(()),
+        scheme => Err(format!("design_url scheme '{}' is not supported", scheme)),
+    }
+}
+
+fn validate_tint_color(tint_color: Option<&str>) -> Result<(), String> {
+    let Some(color) = tint_color else {
+        return Ok(());
+    };
+
+    let hex = color.strip_prefix('#').unwrap_or(color);
+    if hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        Ok(())
+    } else {
+        Err("tint_color must be a 6-digit hex color".to_string())
+    }
+}
+
+fn validate_displacement_strength(strength: f64, range: (f64, f64)) -> Result<(), String> {
+    if !strength.is_finite() {
+        return Err("displacement_strength must be finite".to_string());
+    }
+
+    let (min, max) = range;
+    if strength < min || strength > max {
+        Err(format!(
+            "displacement_strength must be between {} and {}",
+            min, max
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 /// Response for successful mockup generation
@@ -98,6 +136,26 @@ pub async fn generate_mockup(
         "Processing mockup generation request"
     );
 
+    if body.template_id.trim().is_empty() {
+        return HttpResponse::BadRequest().json(ErrorResponse {
+            success: false,
+            error: ApiError {
+                code: "INVALID_TEMPLATE_ID".to_string(),
+                message: "template_id is required".to_string(),
+            },
+        });
+    }
+
+    if let Err(e) = validate_design_url(&body.design_url) {
+        return HttpResponse::BadRequest().json(ErrorResponse {
+            success: false,
+            error: ApiError {
+                code: "INVALID_DESIGN_URL".to_string(),
+                message: e,
+            },
+        });
+    }
+
     // Validate template exists and get its print area dimensions
     let template = match state.template_manager.get(&body.template_id) {
         Some(t) => t,
@@ -112,6 +170,29 @@ pub async fn generate_mockup(
             });
         }
     };
+
+    if let Err(e) = validate_displacement_strength(
+        body.options.displacement_strength,
+        template.metadata.displacement.strength_range,
+    ) {
+        return HttpResponse::BadRequest().json(ErrorResponse {
+            success: false,
+            error: ApiError {
+                code: "INVALID_OPTIONS".to_string(),
+                message: e,
+            },
+        });
+    }
+
+    if let Err(e) = validate_tint_color(body.options.tint_color.as_deref()) {
+        return HttpResponse::BadRequest().json(ErrorResponse {
+            success: false,
+            error: ApiError {
+                code: "INVALID_OPTIONS".to_string(),
+                message: e,
+            },
+        });
+    }
 
     // Create placement with template's actual print area dimensions
     let mut placement = body.placement.clone();
@@ -173,5 +254,44 @@ pub async fn generate_mockup(
                 },
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_design_url_allows_http_urls() {
+        assert!(validate_design_url("https://example.com/design.png").is_ok());
+        assert!(validate_design_url("http://example.com/design.png").is_ok());
+    }
+
+    #[test]
+    fn validate_design_url_rejects_relative_and_non_http_urls() {
+        assert!(validate_design_url("/samples/design.png").is_err());
+        assert!(validate_design_url("data:image/png;base64,abc").is_err());
+        assert!(validate_design_url("file:///tmp/design.png").is_err());
+    }
+
+    #[test]
+    fn validate_tint_color_accepts_six_digit_hex() {
+        assert!(validate_tint_color(Some("0D0D0D")).is_ok());
+        assert!(validate_tint_color(Some("#ff00AA")).is_ok());
+        assert!(validate_tint_color(None).is_ok());
+    }
+
+    #[test]
+    fn validate_tint_color_rejects_invalid_hex() {
+        assert!(validate_tint_color(Some("#fff")).is_err());
+        assert!(validate_tint_color(Some("#GGGGGG")).is_err());
+    }
+
+    #[test]
+    fn validate_displacement_strength_enforces_template_range() {
+        assert!(validate_displacement_strength(10.0, (0.0, 30.0)).is_ok());
+        assert!(validate_displacement_strength(-1.0, (0.0, 30.0)).is_err());
+        assert!(validate_displacement_strength(31.0, (0.0, 30.0)).is_err());
+        assert!(validate_displacement_strength(f64::NAN, (0.0, 30.0)).is_err());
     }
 }
