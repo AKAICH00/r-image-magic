@@ -6,9 +6,11 @@
 use base64::Engine;
 use bytes::Bytes;
 use image::{DynamicImage, GenericImageView, GrayImage, Luma, Rgba, RgbaImage};
+use std::net::IpAddr;
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, info};
+use url::{Host, Url};
 
 use super::displacement::{apply_displacement, apply_opacity};
 use super::template::Template;
@@ -18,6 +20,10 @@ use crate::domain::PlacementSpec;
 /// Compositing errors
 #[derive(Debug, Error)]
 pub enum CompositorError {
+    #[error("Invalid design image URL: {0}")]
+    InvalidDesignUrl(String),
+    #[error("Design image is too large: {0} bytes")]
+    DesignTooLarge(u64),
     #[error("Failed to fetch design image: {0}")]
     FetchFailed(String),
     #[error("Failed to decode image: {0}")]
@@ -42,6 +48,64 @@ pub struct MockupResult {
     pub width: u32,
     pub height: u32,
     pub bytes: Bytes,
+}
+
+const MAX_DESIGN_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
+
+fn validate_fetch_url(url: &str) -> Result<Url, CompositorError> {
+    let parsed = Url::parse(url)
+        .map_err(|_| CompositorError::InvalidDesignUrl("must be an absolute URL".to_string()))?;
+
+    match parsed.scheme() {
+        "http" | "https" => {}
+        scheme => {
+            return Err(CompositorError::InvalidDesignUrl(format!(
+                "scheme '{}' is not supported",
+                scheme
+            )));
+        }
+    }
+
+    let host = parsed
+        .host()
+        .ok_or_else(|| CompositorError::InvalidDesignUrl("host is required".to_string()))?;
+    if is_blocked_host(host) {
+        return Err(CompositorError::InvalidDesignUrl(
+            "local and private network hosts are not allowed".to_string(),
+        ));
+    }
+
+    Ok(parsed)
+}
+
+fn is_blocked_host(host: Host<&str>) -> bool {
+    match host {
+        Host::Domain(domain) => {
+            let domain = domain.trim_end_matches('.').to_ascii_lowercase();
+            domain == "localhost" || domain.ends_with(".localhost")
+        }
+        Host::Ipv4(ip) => is_blocked_ip(IpAddr::V4(ip)),
+        Host::Ipv6(ip) => is_blocked_ip(IpAddr::V6(ip)),
+    }
+}
+
+fn is_blocked_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ip) => {
+            ip.is_private()
+                || ip.is_loopback()
+                || ip.is_link_local()
+                || ip.is_broadcast()
+                || ip.is_documentation()
+                || ip.is_unspecified()
+        }
+        IpAddr::V6(ip) => {
+            ip.is_loopback()
+                || ip.is_unspecified()
+                || ip.is_unique_local()
+                || ip.is_unicast_link_local()
+        }
+    }
 }
 
 /// Parse a hex color string (with or without leading '#') into (r, g, b)
@@ -109,10 +173,15 @@ impl Compositor {
 
         // Build an optional local print mask (same dimensions as design) from the full-canvas template mask.
         // White/non-zero = printable pixel; zero = skip compositing.
-        let print_mask_region = template
-            .print_mask
-            .as_ref()
-            .map(|mask| Self::crop_mask_region(mask, abs_x, abs_y, design_width as u32, design_height as u32));
+        let print_mask_region = template.print_mask.as_ref().map(|mask| {
+            Self::crop_mask_region(
+                mask,
+                abs_x,
+                abs_y,
+                design_width as u32,
+                design_height as u32,
+            )
+        });
 
         // 3. Apply displacement mapping if available
         // Crop the displacement map to the exact region where the design lands,
@@ -186,7 +255,10 @@ impl Compositor {
             }
         } else if let Some(ref cz) = template.metadata.collar_zone {
             debug!(
-                x = cz.x, y = cz.y, w = cz.width, h = cz.height,
+                x = cz.x,
+                y = cz.y,
+                w = cz.width,
+                h = cz.height,
                 "Restoring legacy collar zone from original base"
             );
             let base_rgba = base_ref.to_rgba8();
@@ -229,6 +301,7 @@ impl Compositor {
     async fn fetch_design(&self, url: &str) -> Result<DynamicImage, CompositorError> {
         debug!(url = %url, "Fetching design image");
 
+        validate_fetch_url(url)?;
         let response = self.http_client.get(url).send().await?;
 
         if !response.status().is_success() {
@@ -239,7 +312,17 @@ impl Compositor {
             )));
         }
 
+        if let Some(content_length) = response.content_length() {
+            if content_length > MAX_DESIGN_IMAGE_BYTES {
+                return Err(CompositorError::DesignTooLarge(content_length));
+            }
+        }
+
         let bytes = response.bytes().await?;
+        if bytes.len() as u64 > MAX_DESIGN_IMAGE_BYTES {
+            return Err(CompositorError::DesignTooLarge(bytes.len() as u64));
+        }
+
         let image = image::load_from_memory(&bytes)?;
 
         debug!(
@@ -312,9 +395,14 @@ impl Compositor {
         DynamicImage::ImageRgba8(base_rgba)
     }
 
-
     /// Crop full-canvas mask into design-local region aligned with placement offsets.
-    fn crop_mask_region(mask: &DynamicImage, x_offset: i32, y_offset: i32, width: u32, height: u32) -> GrayImage {
+    fn crop_mask_region(
+        mask: &DynamicImage,
+        x_offset: i32,
+        y_offset: i32,
+        width: u32,
+        height: u32,
+    ) -> GrayImage {
         let src = mask.to_luma8();
         let (mw, mh) = src.dimensions();
         let mut out = GrayImage::from_pixel(width, height, Luma([0]));
@@ -341,7 +429,11 @@ impl Compositor {
     }
 
     /// Restore pixels from the original base image where a full-canvas preserve mask is non-zero.
-    fn restore_from_mask(base: &DynamicImage, composited: &DynamicImage, preserve_mask: &DynamicImage) -> DynamicImage {
+    fn restore_from_mask(
+        base: &DynamicImage,
+        composited: &DynamicImage,
+        preserve_mask: &DynamicImage,
+    ) -> DynamicImage {
         let base_rgba = base.to_rgba8();
         let mut comp_rgba = composited.to_rgba8();
         let mask = preserve_mask.to_luma8();
@@ -544,6 +636,31 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_fetch_url_allows_public_http_urls() {
+        assert!(validate_fetch_url("https://cdn.example.com/design.png").is_ok());
+        assert!(validate_fetch_url("http://203.0.114.10/design.png").is_ok());
+    }
+
+    #[test]
+    fn test_validate_fetch_url_rejects_non_http_urls() {
+        assert!(validate_fetch_url("file:///tmp/design.png").is_err());
+        assert!(validate_fetch_url("data:image/png;base64,abc").is_err());
+        assert!(validate_fetch_url("/samples/design.png").is_err());
+    }
+
+    #[test]
+    fn test_validate_fetch_url_rejects_local_targets() {
+        assert!(validate_fetch_url("http://localhost/design.png").is_err());
+        assert!(validate_fetch_url("http://api.localhost/design.png").is_err());
+        assert!(validate_fetch_url("http://127.0.0.1/design.png").is_err());
+        assert!(validate_fetch_url("http://10.1.2.3/design.png").is_err());
+        assert!(validate_fetch_url("http://172.16.0.1/design.png").is_err());
+        assert!(validate_fetch_url("http://192.168.0.1/design.png").is_err());
+        assert!(validate_fetch_url("http://[::1]/design.png").is_err());
+        assert!(validate_fetch_url("http://[fc00::1]/design.png").is_err());
+    }
+
+    #[test]
     fn test_tint_white_pixel() {
         let img = DynamicImage::ImageRgba8(RgbaImage::from_pixel(1, 1, Rgba([255, 255, 255, 255])));
         let tinted = Compositor::tint_template(&img, 13, 13, 13);
@@ -571,7 +688,8 @@ mod tests {
     #[test]
     fn test_composite_design_respects_print_mask() {
         let c = Compositor::new();
-        let base = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([255, 255, 255, 255])));
+        let base =
+            DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([255, 255, 255, 255])));
         let design = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([255, 0, 0, 255])));
         let mut mask = GrayImage::from_pixel(2, 1, Luma([0]));
         mask.put_pixel(0, 0, Luma([255]));
@@ -585,7 +703,8 @@ mod tests {
     #[test]
     fn test_restore_from_mask_preserves_base_pixels() {
         let base = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([10, 20, 30, 255])));
-        let composited = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([200, 100, 50, 255])));
+        let composited =
+            DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba([200, 100, 50, 255])));
         let mut preserve = RgbaImage::from_pixel(2, 1, Rgba([0, 0, 0, 255]));
         preserve.put_pixel(1, 0, Rgba([255, 255, 255, 255]));
         let preserve = DynamicImage::ImageRgba8(preserve);
