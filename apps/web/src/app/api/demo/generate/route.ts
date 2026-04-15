@@ -21,6 +21,58 @@ function getDemoErrorMessage(payload: unknown) {
   return message ?? "Generation failed.";
 }
 
+type DemoGenerateBody = {
+  design_url: string;
+  template_id: string;
+  placement: { scale: number; offset_x: number; offset_y: number };
+  options?: { tint_color?: string };
+};
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function parseDemoGenerateBody(payload: unknown): DemoGenerateBody | string {
+  if (!payload || typeof payload !== "object") {
+    return "Request body must be a JSON object.";
+  }
+
+  const body = payload as Partial<DemoGenerateBody>;
+  if (typeof body.design_url !== "string" || body.design_url.trim() === "") {
+    return "design_url is required.";
+  }
+  if (typeof body.template_id !== "string" || body.template_id.trim() === "") {
+    return "template_id is required.";
+  }
+  if (!body.placement || typeof body.placement !== "object") {
+    return "placement is required.";
+  }
+  if (
+    !isFiniteNumber(body.placement.scale) ||
+    !isFiniteNumber(body.placement.offset_x) ||
+    !isFiniteNumber(body.placement.offset_y)
+  ) {
+    return "placement scale, offset_x, and offset_y must be numbers.";
+  }
+  if (
+    body.options?.tint_color !== undefined &&
+    typeof body.options.tint_color !== "string"
+  ) {
+    return "options.tint_color must be a string.";
+  }
+
+  return {
+    design_url: body.design_url,
+    template_id: body.template_id,
+    placement: {
+      scale: body.placement.scale,
+      offset_x: body.placement.offset_x,
+      offset_y: body.placement.offset_y,
+    },
+    options: body.options,
+  };
+}
+
 export async function POST(request: NextRequest) {
   if (!isDemoApiConfigured()) {
     return NextResponse.json(
@@ -46,16 +98,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = (await request.json()) as {
-    design_url: string;
-    template_id: string;
-    placement: { scale: number; offset_x: number; offset_y: number };
-    options?: { tint_color?: string };
-  };
+  let requestPayload: unknown;
+  try {
+    requestPayload = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Request body must be valid JSON." },
+      { status: 400 },
+    );
+  }
+
+  const parsedBody = parseDemoGenerateBody(requestPayload);
+  if (typeof parsedBody === "string") {
+    return NextResponse.json({ error: parsedBody }, { status: 400 });
+  }
 
   const publicSiteUrl = getPublicSiteUrl(request.nextUrl.origin);
 
-  if (!publicSiteUrl && body.design_url.startsWith("/")) {
+  if (!publicSiteUrl && parsedBody.design_url.startsWith("/")) {
     return NextResponse.json(
       {
         error:
@@ -65,9 +125,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const resolvedDesignUrl = body.design_url.startsWith("/")
-    ? `${publicSiteUrl}${body.design_url}`
-    : body.design_url;
+  const resolvedDesignUrl = parsedBody.design_url.startsWith("/")
+    ? `${publicSiteUrl}${parsedBody.design_url}`
+    : parsedBody.design_url;
 
   const response = await fetch(
     `${getMeetMockupApiUrl()}/api/v1/mockups/generate`,
@@ -78,28 +138,28 @@ export async function POST(request: NextRequest) {
         "X-API-Key": process.env.MEETMOCKUP_API_KEY ?? "",
       },
       body: JSON.stringify({
-        ...body,
+        ...parsedBody,
         design_url: resolvedDesignUrl,
       }),
       cache: "no-store",
     },
   );
 
-  let payload: unknown;
+  let apiPayload: unknown;
   try {
-    payload = await response.json();
+    apiPayload = await response.json();
   } catch {
-    payload = null;
+    apiPayload = null;
   }
 
   if (!response.ok) {
     return NextResponse.json(
-      { error: getDemoErrorMessage(payload) },
+      { error: getDemoErrorMessage(apiPayload) },
       { status: response.status },
     );
   }
 
-  const nextResponse = NextResponse.json(payload, { status: 200 });
+  const nextResponse = NextResponse.json(apiPayload, { status: 200 });
   nextResponse.cookies.set("demo_count", String(currentCount + 1), {
     maxAge: 60 * 60,
     path: "/",
