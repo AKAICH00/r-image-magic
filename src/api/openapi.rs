@@ -8,6 +8,7 @@ use crate::api::handlers::{
         GenerateResponse,
     },
     health::HealthResponse,
+    tile::{TileMetadata, TileRequest, TileResponse},
     templates::{
         ProductTypeCount, ProductTypesResponse, TemplateApiError, TemplateErrorResponse,
         TemplateResponse, TemplatesListResponse,
@@ -42,6 +43,7 @@ use crate::domain::{CoordinateSpace, PlacementSpec, PlacementType};
     paths(
         crate::api::handlers::health::health_check,
         crate::api::handlers::generate::generate_mockup,
+        crate::api::handlers::tile::tile_pattern,
         crate::api::handlers::templates::list_templates,
         crate::api::handlers::templates::get_template,
         crate::api::handlers::templates::list_product_types,
@@ -59,6 +61,10 @@ use crate::domain::{CoordinateSpace, PlacementSpec, PlacementType};
             Dimensions,
             ErrorResponse,
             ApiError,
+            // Tile schemas
+            TileRequest,
+            TileResponse,
+            TileMetadata,
             // Template schemas
             TemplatesListResponse,
             TemplateResponse,

@@ -5,5 +5,6 @@ pub mod generate;
 pub mod health;
 pub mod keys;
 pub mod sync;
+pub mod tile;
 pub mod templates;
 pub mod usage;

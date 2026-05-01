@@ -19,6 +19,9 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
                 web::post().to(handlers::generate::generate_mockup),
             ))
             .service(
+                web::scope("/tile").route("", web::post().to(handlers::tile::tile_pattern)),
+            )
+            .service(
                 web::scope("/templates")
                     // More specific routes first
                     .route(
