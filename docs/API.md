@@ -7,10 +7,39 @@ The R-Image-Magic API is a high-performance RESTful service for mockup generatio
 Authentication is handled via API Keys in the `X-API-Key` header.
 
 ```bash
-curl -H "X-API-Key: your_api_key" http://localhost:8080/api/v1/health
+curl -H "X-API-Key: your_api_key" http://localhost:8080/api/v1/usage
 ```
 
 *Note: If no `DATABASE_URL` is configured, the service runs in "local-only" mode and authentication is bypassed.*
+
+### Self-Serve API Key Signup
+`POST /api/v1/keys/signup`
+
+Creates a free-tier developer key without requiring an existing admin key.
+
+#### Request Body
+```json
+{
+  "email": "you@example.com",
+  "name": "Alex",
+  "company": "Northwind Studio",
+  "project_name": "Etsy hoodie launch"
+}
+```
+
+#### Example Response
+```json
+{
+  "id": "2efcccf8-f06d-4c6b-b7e6-2a3cbe0d3f7b",
+  "api_key": "rim_abc123...",
+  "key_prefix": "rim_abc123",
+  "tier": "free",
+  "rate_limit_per_minute": 10,
+  "monthly_quota": 100,
+  "owner_email": "you@example.com",
+  "message": "Free API key created successfully. Save the api_key value now because it will not be shown again."
+}
+```
 
 ## 2. Mockup Generation
 
