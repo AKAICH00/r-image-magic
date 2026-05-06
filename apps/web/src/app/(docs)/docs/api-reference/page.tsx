@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "API reference",
@@ -21,6 +22,12 @@ export default function ApiReferencePage() {
       <h2>Authentication</h2>
       <p>
         Send your API key in the <code>X-API-Key</code> header.
+      </p>
+
+      <h2>Self-serve onboarding</h2>
+      <p>
+        Create a free-tier API key with <code>POST /api/v1/keys/signup</code>{" "}
+        or use <Link href="/signup">the signup page</Link> in the web app.
       </p>
 
       <h2>Key endpoints</h2>
@@ -52,6 +59,11 @@ export default function ApiReferencePage() {
             <td>GET</td>
             <td>/api/v1/usage</td>
             <td>Usage stats for the current key</td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td>/api/v1/keys/signup</td>
+            <td>Create a free developer key</td>
           </tr>
           <tr>
             <td>GET</td>

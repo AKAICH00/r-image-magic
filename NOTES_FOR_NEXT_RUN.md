@@ -1,21 +1,20 @@
 # Notes For Next Run
 
-## What This Project Is
-- `r-image-magic` is the MeetMockup monorepo: a Rust/Actix mockup-generation API plus a Next.js marketing/demo app.
-- The API focus is realistic product mockups with displacement mapping, AOP template support, POD provider catalog sync, and usage/key infrastructure.
-- The web focus is a public MeetMockup funnel with an interactive demo backed by the API.
+## What this project is
+- `r-image-magic` is the MeetMockup monorepo: a Rust/Actix mockup-generation API plus a Next.js marketing, docs, and interactive demo app.
+- The product direction is API-first for POD sellers and developers who need realistic displacement-based mockups.
 
-## Done In This Run
-- Opened PR #2: generation request validation for URL shape, empty template IDs, tint color format, and template-specific displacement ranges.
-- Opened PR #3: compositor fetch guards for malformed URLs, local/private IP literal targets, and oversized design images.
-- Opened PR #4: demo API/upload route hardening for malformed request bodies and backend upload failures.
+## What was done in this run
+- Added backend guards around remote design fetches so malformed URLs, private/local IP literals, and oversized design downloads fail before decode.
+- Hardened the public demo generation and upload routes to return controlled JSON errors for bad input and upstream/storage failures.
+- Aligned the web/docs onboarding copy with the actual product path and refreshed this handoff note.
 
-## Remaining Next
-- Merge PRs #2, #3, and #4 after checks finish and branch protection allows it.
-- Reduce API warning/lint debt so `cargo clippy --all-targets -- -D warnings` can become a useful gate.
-- Add resolver-level SSRF protection if arbitrary public design hostnames remain supported.
+## What remains next
+- Add resolver-level protections if arbitrary external design hosts remain supported; literal-IP blocking does not cover DNS rebinding.
+- Reduce existing Rust warning debt so stricter static-analysis gates become practical.
+- Exercise the demo and upload flows against live configured credentials, not just local build/test checks.
 
-## Risks Or Caveats
-- Current SSRF guard blocks obvious local/private IP literals but does not prevent DNS rebinding.
-- API tests pass with many existing warnings; strict clippy currently fails on baseline issues.
-- Live deployed API behavior was not exercised because this run focused on local checks and PRs.
+## Risks or caveats
+- Demo uploads still depend on valid R2 configuration for the hosted-upload path.
+- The compositor security guard is a meaningful improvement, not a complete SSRF solution.
+- `cargo test` passes today with many warnings; web checks require installing `apps/web` dependencies first.
