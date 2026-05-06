@@ -16,8 +16,10 @@ export default function DocsGettingStartedPage() {
 
       <h2>1. Create an account</h2>
       <p>
-        Sign up at <Link href="/signup">meetmockup.com/signup</Link> to get
-        access to your account area and API credentials.
+        Start at <Link href="/signup">/signup</Link>. If Clerk is configured
+        you will see the hosted auth flow. Otherwise the page provisions a
+        free-tier API key directly from the backend and stores it in your
+        browser for the dashboard pages.
       </p>
 
       <h2>2. Make your first request</h2>
@@ -61,6 +63,12 @@ export default function DocsGettingStartedPage() {
         Browse templates visually on{" "}
         <Link href="/templates">the templates page</Link> or integrate the
         listing endpoints directly from your backend.
+      </p>
+
+      <h2>5. Use the dashboard with your key</h2>
+      <p>
+        Paste a key into <Link href="/dashboard">the dashboard</Link> to inspect
+        usage, billing, and all keys attached to the same owner email.
       </p>
     </article>
   );

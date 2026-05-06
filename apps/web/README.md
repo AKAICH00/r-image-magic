@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MeetMockup Web
 
-## Getting Started
+Next.js 15 frontend for the MeetMockup marketing site, docs, demo, and lightweight developer dashboard.
 
-First, run the development server:
+## What lives here
+
+- Marketing pages for the API-first mockup product
+- Interactive demo routes that proxy to the Rust API
+- Docs pages for onboarding and API usage
+- Browser-local dashboard pages driven by a saved API key
+- Clerk auth screens when Clerk is configured
+
+## Local development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Useful environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+NEXT_PUBLIC_MEETMOCKUP_API_URL=http://localhost:8080
+MEETMOCKUP_API_KEY=...                 # enables the live marketing demo proxy
+NEXT_PUBLIC_SITE_URL=https://...       # needed for public demo asset URLs
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...  # optional
+CLERK_SECRET_KEY=...                   # optional
+```
 
-## Learn More
+If Clerk is not configured, `/signup` falls back to the self-serve API key flow and the dashboard stores the returned key in browser local storage.
 
-To learn more about Next.js, take a look at the following resources:
+## Checks
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm lint
+pnpm build
+```
