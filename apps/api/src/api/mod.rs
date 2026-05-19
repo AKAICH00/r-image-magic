@@ -14,9 +14,7 @@ use crate::api::openapi::ApiDoc;
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api/v1")
-            .service(
-                web::scope("/tile").route("", web::post().to(handlers::tile::tile_pattern)),
-            )
+            .service(web::scope("/tile").route("", web::post().to(handlers::tile::tile_pattern)))
             .service(web::scope("/mockups").route(
                 "/generate",
                 web::post().to(handlers::generate::generate_mockup),
@@ -42,6 +40,10 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
             // API key management endpoints
             .service(
                 web::scope("/keys")
+                    .route(
+                        "/signup",
+                        web::post().to(handlers::keys::signup_for_api_key),
+                    )
                     .route("", web::post().to(handlers::keys::create_api_key))
                     .route("", web::get().to(handlers::keys::list_keys))
                     .route("/me", web::get().to(handlers::keys::get_my_key))
