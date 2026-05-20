@@ -4,6 +4,7 @@
 
 use actix_web::{web, HttpResponse};
 use serde::{Deserialize, Serialize};
+use tokio_postgres::types::ToSql;
 use uuid::Uuid;
 
 use crate::db::DbPool;
@@ -33,6 +34,8 @@ fn default_page() -> u32 {
 fn default_per_page() -> u32 {
     50
 }
+
+const MAX_PER_PAGE: u32 = 100;
 
 /// Provider response
 #[derive(Debug, Serialize)]
@@ -118,6 +121,89 @@ pub struct PaginatedResponse<T> {
     pub page: u32,
     pub per_page: u32,
     pub total_pages: u32,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct ProductFilterSql {
+    where_clause: String,
+    values: Vec<String>,
+}
+
+fn escape_like_term(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
+fn normalize_pagination(query: &ProductsQuery) -> (u32, u32) {
+    (query.page.max(1), query.per_page.clamp(1, MAX_PER_PAGE))
+}
+
+fn push_filter(
+    conditions: &mut Vec<String>,
+    values: &mut Vec<String>,
+    sql_template: impl FnOnce(usize) -> String,
+    raw_value: &Option<String>,
+) {
+    if let Some(value) = raw_value
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        values.push(value.to_string());
+        conditions.push(sql_template(values.len()));
+    }
+}
+
+fn build_product_filter_sql(query: &ProductsQuery) -> ProductFilterSql {
+    let mut conditions = Vec::new();
+    let mut values = Vec::new();
+
+    push_filter(
+        &mut conditions,
+        &mut values,
+        |idx| format!("pr.code = ${idx}"),
+        &query.provider,
+    );
+    push_filter(
+        &mut conditions,
+        &mut values,
+        |idx| format!("c.slug = ${idx}"),
+        &query.category,
+    );
+    push_filter(
+        &mut conditions,
+        &mut values,
+        |idx| format!("p.product_type = ${idx}"),
+        &query.product_type,
+    );
+
+    if let Some(search) = query
+        .search
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        values.push(format!("%{}%", escape_like_term(search)));
+        conditions.push(format!("p.name ILIKE ${} ESCAPE '\\'", values.len()));
+    }
+
+    ProductFilterSql {
+        where_clause: if conditions.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", conditions.join(" AND "))
+        },
+        values,
+    }
+}
+
+fn as_sql_params(values: &[String]) -> Vec<&(dyn ToSql + Sync)> {
+    values
+        .iter()
+        .map(|value| value as &(dyn ToSql + Sync))
+        .collect()
 }
 
 /// Helper macro to get database client
@@ -218,33 +304,11 @@ pub async fn list_products(
     query_params: web::Query<ProductsQuery>,
 ) -> HttpResponse {
     let client = get_client!(pool);
-
-    let offset = ((query_params.page.saturating_sub(1)) * query_params.per_page) as i64;
-    let limit = query_params.per_page as i64;
-
-    // Build dynamic WHERE clause
-    let mut conditions = Vec::new();
-    if let Some(ref p) = query_params.provider {
-        conditions.push(format!("pr.code = '{}'", p.replace('\'', "''")));
-    }
-    if let Some(ref c) = query_params.category {
-        conditions.push(format!("c.slug = '{}'", c.replace('\'', "''")));
-    }
-    if let Some(ref t) = query_params.product_type {
-        conditions.push(format!("p.product_type = '{}'", t.replace('\'', "''")));
-    }
-    if let Some(ref s) = query_params.search {
-        conditions.push(format!(
-            "p.name ILIKE '%{}%'",
-            s.replace('\'', "''").replace('%', "\\%")
-        ));
-    }
-
-    let where_clause = if conditions.is_empty() {
-        String::new()
-    } else {
-        format!("WHERE {}", conditions.join(" AND "))
-    };
+    let (page, per_page) = normalize_pagination(&query_params);
+    let offset = ((page - 1) * per_page) as i64;
+    let limit = per_page as i64;
+    let filter_sql = build_product_filter_sql(&query_params);
+    let count_params = as_sql_params(&filter_sql.values);
 
     // Count query
     let count_sql = format!(
@@ -255,10 +319,10 @@ pub async fn list_products(
         LEFT JOIN product_categories c ON p.category_id = c.id
         {}
     "#,
-        where_clause
+        filter_sql.where_clause
     );
 
-    let total: i64 = match client.query_one(&count_sql, &[]).await {
+    let total: i64 = match client.query_one(&count_sql, &count_params).await {
         Ok(row) => row.get("total"),
         Err(e) => {
             tracing::error!("Failed to count products: {}", e);
@@ -267,6 +331,9 @@ pub async fn list_products(
             }));
         }
     };
+
+    let limit_placeholder = filter_sql.values.len() + 1;
+    let offset_placeholder = filter_sql.values.len() + 2;
 
     // Data query
     let data_sql = format!(
@@ -281,12 +348,16 @@ pub async fn list_products(
         LEFT JOIN product_categories c ON p.category_id = c.id
         {}
         ORDER BY p.name
-        LIMIT {} OFFSET {}
+        LIMIT ${} OFFSET ${}
     "#,
-        where_clause, limit, offset
+        filter_sql.where_clause, limit_placeholder, offset_placeholder
     );
 
-    match client.query(&data_sql, &[]).await {
+    let mut data_params = count_params;
+    data_params.push(&limit);
+    data_params.push(&offset);
+
+    match client.query(&data_sql, &data_params).await {
         Ok(rows) => {
             let products: Vec<ProductSummaryResponse> = rows
                 .iter()
@@ -302,13 +373,17 @@ pub async fn list_products(
                 })
                 .collect();
 
-            let total_pages = ((total as f64) / (query_params.per_page as f64)).ceil() as u32;
+            let total_pages = if total == 0 {
+                0
+            } else {
+                ((total as f64) / (per_page as f64)).ceil() as u32
+            };
 
             HttpResponse::Ok().json(PaginatedResponse {
                 items: products,
                 total,
-                page: query_params.page,
-                per_page: query_params.per_page,
+                page,
+                per_page,
                 total_pages,
             })
         }
@@ -318,6 +393,70 @@ pub async fn list_products(
                 "error": "Failed to list products"
             }))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_product_filter_sql, escape_like_term, normalize_pagination, ProductsQuery};
+
+    fn sample_query() -> ProductsQuery {
+        ProductsQuery {
+            provider: None,
+            category: None,
+            product_type: None,
+            search: None,
+            page: 1,
+            per_page: 50,
+        }
+    }
+
+    #[test]
+    fn builds_parameterized_filters_in_order() {
+        let mut query = sample_query();
+        query.provider = Some("printful".to_string());
+        query.category = Some("shirts".to_string());
+        query.product_type = Some("hoodie".to_string());
+        query.search = Some("logo tee".to_string());
+
+        let filters = build_product_filter_sql(&query);
+
+        assert_eq!(
+            filters.where_clause,
+            "WHERE pr.code = $1 AND c.slug = $2 AND p.product_type = $3 AND p.name ILIKE $4 ESCAPE '\\'"
+        );
+        assert_eq!(
+            filters.values,
+            vec![
+                "printful".to_string(),
+                "shirts".to_string(),
+                "hoodie".to_string(),
+                "%logo tee%".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn escapes_like_wildcards_in_search_terms() {
+        assert_eq!(
+            escape_like_term(r"100% cotton_\ready"),
+            r"100\% cotton\_\\ready"
+        );
+    }
+
+    #[test]
+    fn ignores_blank_filters_and_clamps_pagination() {
+        let mut query = sample_query();
+        query.provider = Some("   ".to_string());
+        query.search = Some("   ".to_string());
+        query.page = 0;
+        query.per_page = 500;
+
+        let filters = build_product_filter_sql(&query);
+
+        assert_eq!(filters.where_clause, "");
+        assert!(filters.values.is_empty());
+        assert_eq!(normalize_pagination(&query), (1, 100));
     }
 }
 
