@@ -15,7 +15,11 @@ export function isDemoReadyForRelativeAssets() {
 }
 
 export function getMeetMockupApiUrl() {
-  return process.env.MEETMOCKUP_API_URL ?? "https://api.meetmockup.com";
+  return (
+    process.env.NEXT_PUBLIC_MEETMOCKUP_API_URL ??
+    process.env.MEETMOCKUP_API_URL ??
+    "https://api.meetmockup.com"
+  );
 }
 
 export function normalizeBaseUrl(url: string) {
